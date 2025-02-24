@@ -61,7 +61,7 @@ class PositionModifier(Modifier):
     def get_distance(self):
         dist = self.args["distance"]
         if isinstance(dist, Physical):
-            return dist
+            return Physical(dist.gen_single_value(), dist.unit)
         else:
             print(
                 "[Error] 'distance' parameter of PositionModifier must be 'Physical' type"
@@ -166,7 +166,7 @@ class LateralModifier(Modifier):
     def get_distance(self):
         dist = self.args["distance"]
         if isinstance(dist, Physical):
-            return dist
+            return Physical(dist.gen_single_value(), dist.unit)
         else:
             print(
                 "[Error] 'distance' parameter of LateralModifier must be 'Physical' type"
@@ -331,3 +331,10 @@ class AvoidCollisionsModifier(Modifier):
     def get_bool(self):
         return self.args["bool"]
 
+
+class SetBMModifier(Modifier):
+    def __init__(self, actor_name, name):
+        super().__init__(actor_name, name)
+
+    def get_bm_name(self):
+        return self.args["bm"]

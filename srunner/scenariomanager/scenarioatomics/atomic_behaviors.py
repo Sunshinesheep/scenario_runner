@@ -24,6 +24,7 @@ import subprocess
 from bisect import bisect_right
 
 import numpy as np
+from networkx.generators.ego import ego_graph
 from numpy import random
 import py_trees
 from py_trees.blackboard import Blackboard
@@ -31,6 +32,7 @@ import networkx
 
 import carla
 from agents.navigation.basic_agent import BasicAgent
+from agents.navigation.behavior_agent import BehaviorAgent
 from agents.navigation.local_planner import RoadOption, LocalPlanner
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.tools.misc import is_within_distance
@@ -138,6 +140,28 @@ class AtomicBehavior(py_trees.behaviour.Behaviour):
         """
         self.logger.debug("%s.terminate()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
 
+
+class SetBM(AtomicBehavior):
+    """
+    set an agent that control the vehicle
+    """
+    def __init__(self, actor, target_agent, name="SetBM"):
+
+        super(SetBM, self).__init__(name, actor)
+        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
+        self._target_agent = target_agent
+
+    def update(self):
+
+        new_status = py_trees.common.Status.RUNNING
+        agent = BehaviorAgent(self._actor, behavior=self._target_agent)
+        self._actor.apply_control(agent.run_step())
+
+        if agent.done():
+            new_status = py_trees.common.Status.SUCCESS
+
+        self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
+        return new_status
 
 class RunScript(AtomicBehavior):
 
