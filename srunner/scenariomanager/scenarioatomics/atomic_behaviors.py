@@ -31,9 +31,11 @@ from py_trees.blackboard import Blackboard
 import networkx
 
 import carla
+
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.behavior_agent import BehaviorAgent
 from agents.navigation.local_planner import RoadOption, LocalPlanner
+
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.tools.misc import is_within_distance
 
@@ -44,6 +46,10 @@ from srunner.scenariomanager.timer import GameTime
 from srunner.tools.scenario_helper import detect_lane_obstacle
 from srunner.tools.scenario_helper import generate_target_waypoint_list_multilane
 
+from leaderboard.team_code.interfuser_agent import InterfuserAgent
+from leaderboard.leaderboard.utils.route_manipulation import interpolate_trajectory
+from leaderboard.leaderboard.autoagents.agent_wrapper import AgentWrapper
+from leaderboard.leaderboard.envs.sensor_interface import SensorInterface
 
 import srunner.tools as sr_tools
 
@@ -148,17 +154,76 @@ class SetBM(AtomicBehavior):
     def __init__(self, actor, target_agent, name="SetBM"):
 
         super(SetBM, self).__init__(name, actor)
+        self.agent = None
         self.logger.debug("%s.__init__()" % (self.__class__.__name__))
         self._target_agent = target_agent
+
+    def initialise(self):
+        world = CarlaDataProvider.get_world()
+        settings = world.get_settings()
+        settings.synchronous_mode = True  # 启用同步模式
+        settings.fixed_delta_seconds = 0.05  # 设置时间步长
+        world.apply_settings(settings)
+        self.agent = BehaviorAgent(self._actor, behavior=self._target_agent)
+
+    def update(self):
+        new_status = py_trees.common.Status.RUNNING
+        self._actor.apply_control(self.agent.run_step())
+
+        if self.agent.done():
+            new_status = py_trees.common.Status.SUCCESS
+
+        self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
+        return new_status
+
+class Set_BM_AI(AtomicBehavior):
+    """
+    set an agent that control the vehicle
+    """
+    def __init__(self, actor, target_agent, name="Set_BM_AI"):
+
+        super(Set_BM_AI, self).__init__(name, actor)
+        self._agent = None
+        self.timestamp = None
+        self.input_data = None
+        self.agent = None
+        self.route = None
+        self._world = CarlaDataProvider.get_world()
+        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
+        self._target_agent = target_agent
+
+    def initialise(self):
+        # if hasattr(AIAgent, self._target_agent):
+        #     select_agent = getattr(AIAgent, self._target_agent)
+        #     self.agent = select_agent(self._actor)
+        world = CarlaDataProvider.get_world()
+        settings = world.get_settings()
+        settings.synchronous_mode = True  # 启用同步模式
+        settings.fixed_delta_seconds = 0.05  # 设置时间步长
+        world.apply_settings(settings)
+
+        map = CarlaDataProvider.get_map()
+        _start_location = CarlaDataProvider.get_location(self._actor)
+        _start_wp = map.get_waypoint(_start_location)
+        _end_wp = _start_wp.next(100)
+        _end_location = _end_wp[0].transform.location
+        self.agent = InterfuserAgent("/home/lhy/scenario_runner/leaderboard/team_code/interfuser_config.py")
+        gps_route, self.route = interpolate_trajectory(self._world, [_start_location,
+                                                               _end_location],
+                                                       hop_resolution=1.0)
+        self.agent.set_global_plan(gps_route, self.route)
+        CarlaDataProvider.get_world().tick()
+        self.agent._init()
+        self.agent.sensor_interface = SensorInterface()
+        self._agent = AgentWrapper(self.agent)
+        self._agent.setup_sensors(self._actor, False)
 
     def update(self):
 
         new_status = py_trees.common.Status.RUNNING
-        agent = BehaviorAgent(self._actor, behavior=self._target_agent)
-        self._actor.apply_control(agent.run_step())
-
-        if agent.done():
-            new_status = py_trees.common.Status.SUCCESS
+        self._actor.apply_control(self._agent())
+        # if self.agent.done():
+        #     new_status = py_trees.common.Status.SUCCESS
 
         self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
         return new_status

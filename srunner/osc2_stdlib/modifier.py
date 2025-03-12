@@ -338,3 +338,10 @@ class SetBMModifier(Modifier):
 
     def get_bm_name(self):
         return self.args["bm"]
+
+class SetBMAIModifier(Modifier):
+    def __init__(self, actor_name, name):
+        super().__init__(actor_name, name)
+
+    def get_bm_ai_name(self):
+        return self.args["bm_ai"]

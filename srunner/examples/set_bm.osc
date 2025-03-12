@@ -2,19 +2,24 @@ import basic.osc
 
 scenario top:
     path: Path                      # A path in the map
-    path.set_map("Town04")    # specify map to use in this test
+    path.set_map("Town05")    # specify map to use in this test
     path.path_min_driving_lanes(2)         # Path should have at least two lanes
 
     ego_vehicle: Model3                # ego car
     npc: Rubicon               # The other car
+    npc2: Model3
 
     event start
     do serial:
-        get_ahead: parallel(duration: 20s):
+        get_ahead: parallel(duration: 40s):
             ego_vehicle.drive(path) with:
-                lane(1, at: start)
-                set_bm(cautious)
+                lane(2, at: start)
+                speed(60kph)
             npc.drive(path) with:
                 lane(right_of: ego_vehicle, at: start)
                 position(20m, ahead_of: ego_vehicle, at: start)
-                set_bm(aggressive)
+                set_bm_AI(interfuser)
+            #npc2.drive(path) with:
+                #lane(left_of: ego_vehicle, at: start)
+                #position(30m, ahead_of: ego_vehicle, at: start)
+                #set_bm_AI(interfuser)

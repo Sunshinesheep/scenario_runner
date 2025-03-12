@@ -33,7 +33,8 @@ from srunner.osc2_stdlib.modifier import (
     PositionModifier,
     SpeedModifier,
     LateralModifier, YawModifier, OrientationModifier, DistanceModifier,
-    PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier
+    PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier,
+    SetBMAIModifier
 )
 
 # OSC2
@@ -47,7 +48,7 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
     LaneChange,
     UniformAcceleration,
     WaypointFollower,
-    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset,SetBM
+    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset, SetBM, Set_BM_AI
 )
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
@@ -213,15 +214,14 @@ def process_speed_modifier(
             father_tree.add_child(car_driving)
             print(f"change status of avoid_collisions to {ac}")
         elif isinstance(modifier, SetBMModifier):
-            world = CarlaDataProvider.get_world()
-            settings = world.get_settings()
-            settings.synchronous_mode = True  # 启用同步模式
-            settings.fixed_delta_seconds = 0.05  # 设置时间步长
-            world.apply_settings(settings)
-            
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
             bm_name = modifier.get_bm_name()
             set_bm = SetBM(actor, bm_name)
+            father_tree.add_child(set_bm)
+        elif isinstance(modifier, SetBMAIModifier):
+            actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            bm_name = modifier.get_bm_ai_name()
+            set_bm = Set_BM_AI(actor, bm_name)
             father_tree.add_child(set_bm)
         else:
             LOG_WARNING("not implement modifier")
@@ -1159,6 +1159,14 @@ class OSC2Scenario(BasicScenario):
                         keyword_args = {}
                         arguments = str(arguments)
                         keyword_args["bm"] = arguments
+                        modifier_ins.set_args(keyword_args)
+                        speed_modifiers.append(modifier_ins)
+
+                    elif modifier_name == "set_bm_AI":
+                        modifier_ins = SetBMAIModifier(actor, modifier_name)
+                        keyword_args = {}
+                        arguments = str(arguments)
+                        keyword_args["bm_ai"] = arguments
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
 
