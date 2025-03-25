@@ -34,7 +34,7 @@ from srunner.osc2_stdlib.modifier import (
     SpeedModifier,
     LateralModifier, YawModifier, OrientationModifier, DistanceModifier,
     PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier,
-    SetBMAIModifier
+    SetBehaviorLogic
 )
 
 # OSC2
@@ -48,7 +48,7 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
     LaneChange,
     UniformAcceleration,
     WaypointFollower,
-    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset, SetBM, Set_BM_AI
+    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset, SetBM, IniBM, SetBehaviorLogic
 )
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
@@ -215,14 +215,37 @@ def process_speed_modifier(
             print(f"change status of avoid_collisions to {ac}")
         elif isinstance(modifier, SetBMModifier):
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            agent_type = modifier.get_type()
             bm_name = modifier.get_bm_name()
-            set_bm = SetBM(actor, bm_name)
+            model_config = modifier.get_hyperparameters()
+            if agent_type == 'AI':
+                max_speed = model_config['max_speed']
+                max_acc = model_config['max_acc']
+                set_bm = IniBM(actor, bm_name, max_speed, max_acc)
+            elif agent_type == 'Script':
+                pass
             father_tree.add_child(set_bm)
-        elif isinstance(modifier, SetBMAIModifier):
+
+        elif isinstance(modifier, SetBehaviorLogic):
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
-            bm_name = modifier.get_bm_ai_name()
-            set_bm = Set_BM_AI(actor, bm_name)
-            father_tree.add_child(set_bm)
+            start_lane = modifier.get_start_lane()
+            end_lane = modifier.get_end_lane()
+            start_distance = modifier.get_start_distance()
+            end_distance = modifier.get_end_distance()
+            ego_car_conf = config.get_car_config("ego_vehicle")
+            ego_car_location = ego_car_conf.get_transform().location
+            ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+            if start_distance < 0:
+                wp_lists = ego_car_wp.previous(start_distance)
+            else:
+                wp_lists = ego_car_wp.next(start_distance)
+            start_wp = wp_lists[0]
+            start_position = start_wp.transform.location
+            npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+            father_tree.add_child(npc_spawn)
+
+            set_behavior_logic = SetBehaviorLogic(actor, start_position, end_distance, start_lane, end_lane)
+            father_tree.add_child(set_behavior_logic)
         else:
             LOG_WARNING("not implement modifier")
 
@@ -1154,22 +1177,39 @@ class OSC2Scenario(BasicScenario):
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
 
-                    elif modifier_name == "set_bm":
+                    elif modifier_name == "set_behavior_model":
                         modifier_ins = SetBMModifier(actor, modifier_name)
                         keyword_args = {}
-                        arguments = str(arguments)
-                        keyword_args["bm"] = arguments
+                        if isinstance(arguments, list):
+                            arguments = OSC2Helper.flat_list(arguments)
+                            for arg in arguments:
+                                if isinstance(arg, tuple):
+                                    keyword_args[arg[0]] = arg[1]
+                        elif isinstance(arguments, tuple):
+                            keyword_args[arguments[0]] = arguments[1]
+                        else:
+                            raise NotImplementedError(
+                                f"no implement argument of {modifier_name}"
+                            )
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
 
-                    elif modifier_name == "set_bm_AI":
-                        modifier_ins = SetBMAIModifier(actor, modifier_name)
+                    elif modifier_name == "set_behavior_logic":
+                        modifier_ins = SetBehaviorLogic(actor, modifier_name)
                         keyword_args = {}
-                        arguments = str(arguments)
-                        keyword_args["bm_ai"] = arguments
+                        if isinstance(arguments, list):
+                            arguments = OSC2Helper.flat_list(arguments)
+                            for arg in arguments:
+                                if isinstance(arg, tuple):
+                                    keyword_args[arg[0]] = arg[1]
+                        elif isinstance(arguments, tuple):
+                            keyword_args[arguments[0]] = arguments[1]
+                        else:
+                            raise NotImplementedError(
+                                f"no implement argument of {modifier_name}"
+                            )
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
-
                     else:
                         raise NotImplementedError(
                             f"no implentment function: {modifier_name}"
@@ -1215,7 +1255,8 @@ class OSC2Scenario(BasicScenario):
                 not in (
                     'speed', 'lane', 'position', 'acceleration', 'keep_lane', 'change_speed', 'change_lane',
                     'keep_position', 'keep_speed', 'lateral', 'yaw', 'orientation', 'along', 'along_trajectory',
-                    'distance', 'physical_movement', 'avoid_collisions'
+                    'distance', 'physical_movement', 'avoid_collisions', 'set_bm', 'set_behavior_model',
+                    'set_behavior_logic'
                 )
             ):
                 line, column = node.get_loc()
@@ -1684,7 +1725,7 @@ class OSC2Scenario(BasicScenario):
         behavior_tree = behavior_builder.get_behavior_tree()
         self.set_behavior_tree(behavior_tree)
 
-        # py_trees.display.render_dot_tree(behavior_tree)
+        #py_trees.display.render_dot_tree(behavior_tree)
 
         return self.behavior
 

@@ -24,13 +24,13 @@ import subprocess
 from bisect import bisect_right
 
 import numpy as np
-from networkx.generators.ego import ego_graph
 from numpy import random
 import py_trees
 from py_trees.blackboard import Blackboard
 import networkx
 
 import carla
+from scipy.signal.windows import blackman
 
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.behavior_agent import BehaviorAgent
@@ -161,8 +161,8 @@ class SetBM(AtomicBehavior):
     def initialise(self):
         world = CarlaDataProvider.get_world()
         settings = world.get_settings()
-        settings.synchronous_mode = True  # 启用同步模式
-        settings.fixed_delta_seconds = 0.05  # 设置时间步长
+        settings.synchronous_mode = True
+        settings.fixed_delta_seconds = 0.05
         world.apply_settings(settings)
         self.agent = BehaviorAgent(self._actor, behavior=self._target_agent)
 
@@ -176,50 +176,93 @@ class SetBM(AtomicBehavior):
         self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
         return new_status
 
-class Set_BM_AI(AtomicBehavior):
+class IniBM(AtomicBehavior):
+    def __init__(self, actor, bm_name, max_speed=5, max_acc=0.75, name="Ini_BM"):
+        super(IniBM, self).__init__(name, actor)
+        self._behavior_model = bm_name
+        self._max_speed = max_speed
+        self._max_acc = max_acc
+        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
+
+    def update(self):
+        blackboard = py_trees.blackboard.Blackboard()
+        blackboard.set("bm_name", self._behavior_model)
+        blackboard.set("max_speed", self._max_speed)
+        blackboard.set("max_acc", self._max_acc)
+        return py_trees.common.Status.SUCCESS
+
+class SetBehaviorLogic(AtomicBehavior):
     """
     set an agent that control the vehicle
     """
-    def __init__(self, actor, target_agent, name="Set_BM_AI"):
+    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, name="Set_BM_AI"):
 
-        super(Set_BM_AI, self).__init__(name, actor)
+        super(SetBehaviorLogic, self).__init__(name, actor)
         self._agent = None
         self.timestamp = None
         self.input_data = None
         self.agent = None
         self.route = None
+        blackboard = py_trees.blackboard.Blackboard()
         self._world = CarlaDataProvider.get_world()
+        self._target_agent = blackboard.get("bm_name")
         self.logger.debug("%s.__init__()" % (self.__class__.__name__))
-        self._target_agent = target_agent
+        self._max_speed = blackboard.get("max_speed")
+        self._max_acc = blackboard.get("max_acc")
+        self._start_position = start_position
+        self._end_position = end_distance
+        self.change = None
+        if start_lane > end_lane:
+            self.change = 'left'
+        elif start_lane < end_lane:
+            self.change = 'right'
 
     def initialise(self):
         # if hasattr(AIAgent, self._target_agent):
         #     select_agent = getattr(AIAgent, self._target_agent)
         #     self.agent = select_agent(self._actor)
+        for sibling in self.parent.children:
+            if sibling is not self and sibling.name == self.name:
+                self.parent.children.remove(self)
         world = CarlaDataProvider.get_world()
         settings = world.get_settings()
-        settings.synchronous_mode = True  # 启用同步模式
-        settings.fixed_delta_seconds = 0.05  # 设置时间步长
+        settings.synchronous_mode = True
+        settings.fixed_delta_seconds = 0.05
         world.apply_settings(settings)
 
         map = CarlaDataProvider.get_map()
-        _start_location = CarlaDataProvider.get_location(self._actor)
-        _start_wp = map.get_waypoint(_start_location)
-        _end_wp = _start_wp.next(100)
-        _end_location = _end_wp[0].transform.location
+        _start_position = self._start_position
+        # _start_location = CarlaDataProvider.get_location(self._actor)
+        _start_wp = map.get_waypoint(_start_position)
+        if self.change:
+            if self.change == 'left':
+                _mid_wp = _start_wp.next(30)[0].get_left_lane()
+            else:
+                _mid_wp = _start_wp.next(30)[0].get_right_lane()
+            _mid_location = _mid_wp.transform.location
+            _end_wp = _mid_wp.next(50)
+            _end_position = _end_wp[0].transform.location
+            gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
+                                                                         _mid_location,_end_position],
+                                                           hop_resolution=1.0)
+        else:
+            _mid_wp = None
+            _end_wp = _start_wp.next(150)
+            _end_position = _end_wp[0].transform.location
+            gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
+                                                                         _end_position],
+                                                           hop_resolution=1.0)
         self.agent = InterfuserAgent("/home/lhy/scenario_runner/leaderboard/team_code/interfuser_config.py")
-        gps_route, self.route = interpolate_trajectory(self._world, [_start_location,
-                                                               _end_location],
-                                                       hop_resolution=1.0)
+        self.agent.config.max_speed = self._max_speed
+        self.agent.config.max_acc = self._max_acc
         self.agent.set_global_plan(gps_route, self.route)
         CarlaDataProvider.get_world().tick()
-        self.agent._init()
+
         self.agent.sensor_interface = SensorInterface()
         self._agent = AgentWrapper(self.agent)
         self._agent.setup_sensors(self._actor, False)
 
     def update(self):
-
         new_status = py_trees.common.Status.RUNNING
         self._actor.apply_control(self._agent())
         # if self.agent.done():

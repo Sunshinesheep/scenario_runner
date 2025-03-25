@@ -336,12 +336,31 @@ class SetBMModifier(Modifier):
     def __init__(self, actor_name, name):
         super().__init__(actor_name, name)
 
-    def get_bm_name(self):
-        return self.args["bm"]
+    def get_type(self):
+        return self.args["behavior_type"]
 
-class SetBMAIModifier(Modifier):
+    def get_bm_name(self):
+        return self.args["model"]
+
+    def get_hyperparameters(self):
+        para = self.args['hyperparameters']
+        pairs = [pair.strip().split('=') for pair in para.split(',')]
+        result = {k.strip(): int(v.strip()) for k, v in pairs}
+        return result
+
+
+class SetBehaviorLogic(Modifier):
     def __init__(self, actor_name, name):
         super().__init__(actor_name, name)
 
-    def get_bm_ai_name(self):
-        return self.args["bm_ai"]
+    def get_start_lane(self):
+        return self.args['lane_s']
+
+    def get_end_lane(self):
+        return self.args['lane_e']
+
+    def get_start_distance(self):
+        return self.args['position_s']
+
+    def get_end_distance(self):
+        return self.args['position_e']
