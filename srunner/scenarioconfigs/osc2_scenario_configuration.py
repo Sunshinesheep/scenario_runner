@@ -21,7 +21,7 @@ from srunner.osc2_dm.physical_types import Physical, Range
 # 标准库
 from srunner.osc2_stdlib.path import Path
 import srunner.osc2_stdlib.environment as Environment
-from srunner.osc2_stdlib.model import set_agent
+# from srunner.osc2_stdlib.model import set_agent
 
 # pylint: disable=line-too-long
 from srunner.scenarioconfigs.scenario_configuration import ScenarioConfiguration
