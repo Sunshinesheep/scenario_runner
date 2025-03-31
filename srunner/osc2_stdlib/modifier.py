@@ -349,18 +349,36 @@ class SetBMModifier(Modifier):
         return result
 
 
-class SetBehaviorLogic(Modifier):
+class SetBehaviorLogicModifier(Modifier):
     def __init__(self, actor_name, name):
         super().__init__(actor_name, name)
 
     def get_start_lane(self):
-        return self.args['lane_s']
+        para = self.args["lane_start"].replace(" ","")
+        lane_start = int(para[0])
+        return lane_start
 
     def get_end_lane(self):
-        return self.args['lane_e']
+        para = self.args["lane_end"].replace(" ", "")
+        lane_end = int(para[0])
+        return lane_end
 
     def get_start_distance(self):
-        return self.args['position_s']
+        para = self.args['position_start'].replace(" ", "")
+        p = para.split(',')
+        distance = int(p[0])
+        d = p[1].strip()
+        direction = d.split(':')[0]
+        if direction == 'behind':
+            distance = -distance
+        return distance
 
     def get_end_distance(self):
-        return self.args['position_e']
+        para = self.args['position_start'].replace(" ","")
+        p = para.split(',')
+        distance = int(p[0])
+        d = p[1].strip()
+        direction = d.split(':')[0]
+        if direction == 'behind':
+            distance = -distance
+        return distance

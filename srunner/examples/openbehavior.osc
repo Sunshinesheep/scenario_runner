@@ -17,21 +17,14 @@ scenario top:
         get_ahead: parallel(duration: 15s):
             ego_vehicle.drive(path) with:
                 lane(2, at: start)
-                speed(60kph)
+                speed(50kph)
             npc.drive(path) with:
                 set_behavior_model(behavior_type: AI, model: Interfuser, hyperparameters: "max_speed=20, max_acc=5")
-                speed(30kph)
                 set_behavior_logic(
                     lane:"1, at:start",
                     position:"15, behind:ego_vehicle, at:start",
                     lane:"2, right_of: ego_vehicle, at:end",
                     position:"20, ahead_of:ego_vehicle, at:end"
-                )
-                set_behavior_logic(
-                    lane_s: 1
-                    position_s:"15, behind:ego_vehicle"
-                    lane_e: 2
-                    position_e:"20, ahead_of:ego_vehicle"
                 )
                 #lane(right_of: ego_vehicle, at: start)
                 #position(20m, behind: ego_vehicle, at: start)

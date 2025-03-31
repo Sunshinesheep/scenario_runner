@@ -6,6 +6,7 @@ import operator
 import random
 import re
 import sys
+from distutils.file_util import move_file
 from typing import List, Tuple
 
 import py_trees
@@ -34,7 +35,7 @@ from srunner.osc2_stdlib.modifier import (
     SpeedModifier,
     LateralModifier, YawModifier, OrientationModifier, DistanceModifier,
     PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier,
-    SetBehaviorLogic
+    SetBehaviorLogicModifier
 )
 
 # OSC2
@@ -226,7 +227,7 @@ def process_speed_modifier(
                 pass
             father_tree.add_child(set_bm)
 
-        elif isinstance(modifier, SetBehaviorLogic):
+        elif isinstance(modifier, SetBehaviorLogicModifier):
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
             start_lane = modifier.get_start_lane()
             end_lane = modifier.get_end_lane()
@@ -236,7 +237,7 @@ def process_speed_modifier(
             ego_car_location = ego_car_conf.get_transform().location
             ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
             if start_distance < 0:
-                wp_lists = ego_car_wp.previous(start_distance)
+                wp_lists = ego_car_wp.previous(-start_distance)
             else:
                 wp_lists = ego_car_wp.next(start_distance)
             start_wp = wp_lists[0]
@@ -1195,15 +1196,16 @@ class OSC2Scenario(BasicScenario):
                         speed_modifiers.append(modifier_ins)
 
                     elif modifier_name == "set_behavior_logic":
-                        modifier_ins = SetBehaviorLogic(actor, modifier_name)
+                        modifier_ins = SetBehaviorLogicModifier(actor, modifier_name)
                         keyword_args = {}
                         if isinstance(arguments, list):
                             arguments = OSC2Helper.flat_list(arguments)
                             for arg in arguments:
                                 if isinstance(arg, tuple):
-                                    keyword_args[arg[0]] = arg[1]
-                        elif isinstance(arguments, tuple):
-                            keyword_args[arguments[0]] = arguments[1]
+                                    if "start" in arg[1]:
+                                        keyword_args[arg[0] + "_start"] = arg[1]
+                                    else:
+                                        keyword_args[arg[0] + "_end"] = arg[1]
                         else:
                             raise NotImplementedError(
                                 f"no implement argument of {modifier_name}"
@@ -1725,7 +1727,7 @@ class OSC2Scenario(BasicScenario):
         behavior_tree = behavior_builder.get_behavior_tree()
         self.set_behavior_tree(behavior_tree)
 
-        #py_trees.display.render_dot_tree(behavior_tree)
+        py_trees.display.render_dot_tree(behavior_tree)
 
         return self.behavior
 

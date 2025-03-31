@@ -195,7 +195,7 @@ class SetBehaviorLogic(AtomicBehavior):
     """
     set an agent that control the vehicle
     """
-    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, name="Set_BM_AI"):
+    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, name="Set_Behavior_Logic"):
 
         super(SetBehaviorLogic, self).__init__(name, actor)
         self._agent = None
@@ -203,14 +203,13 @@ class SetBehaviorLogic(AtomicBehavior):
         self.input_data = None
         self.agent = None
         self.route = None
-        blackboard = py_trees.blackboard.Blackboard()
+        self._target_agent = None
+        self._max_speed = None
+        self._max_acc = None
         self._world = CarlaDataProvider.get_world()
-        self._target_agent = blackboard.get("bm_name")
-        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
-        self._max_speed = blackboard.get("max_speed")
-        self._max_acc = blackboard.get("max_acc")
         self._start_position = start_position
         self._end_position = end_distance
+        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
         self.change = None
         if start_lane > end_lane:
             self.change = 'left'
@@ -221,19 +220,30 @@ class SetBehaviorLogic(AtomicBehavior):
         # if hasattr(AIAgent, self._target_agent):
         #     select_agent = getattr(AIAgent, self._target_agent)
         #     self.agent = select_agent(self._actor)
-        for sibling in self.parent.children:
-            if sibling is not self and sibling.name == self.name:
-                self.parent.children.remove(self)
+
+        # 解决多个相同节点的问题
+        # for sibling in self.parent.children:
+        #     if sibling is not self and sibling.name == self.name:
+        #         self.parent.children.remove(self)
         world = CarlaDataProvider.get_world()
         settings = world.get_settings()
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = 0.05
         world.apply_settings(settings)
 
+        blackboard = py_trees.blackboard.Blackboard()
+        self._target_agent = blackboard.get("bm_name")
+        self._max_speed = blackboard.get("max_speed")
+        self._max_acc = blackboard.get("max_acc")
+
         map = CarlaDataProvider.get_map()
         _start_position = self._start_position
-        # _start_location = CarlaDataProvider.get_location(self._actor)
         _start_wp = map.get_waypoint(_start_position)
+        # _end_wp = _start_wp.next(10)
+        # _end_position = _end_wp[0].transform.location
+        # gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
+        #                                                              _end_position],
+        #                                                hop_resolution=1.0)
         if self.change:
             if self.change == 'left':
                 _mid_wp = _start_wp.next(30)[0].get_left_lane()
@@ -264,9 +274,17 @@ class SetBehaviorLogic(AtomicBehavior):
 
     def update(self):
         new_status = py_trees.common.Status.RUNNING
+        # map = CarlaDataProvider.get_map()
+        # _start_position = CarlaDataProvider.get_location(self._actor)
+        # _start_wp = map.get_waypoint(_start_position)
+        # _end_wp = _start_wp.next(20)
+        # _end_position = _end_wp[0].transform.location
+        # gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
+        #                                                              _end_position],
+        #                                                hop_resolution=1.0)
+        # self.agent.set_global_plan(gps_route, self.route)
+
         self._actor.apply_control(self._agent())
-        # if self.agent.done():
-        #     new_status = py_trees.common.Status.SUCCESS
 
         self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
         return new_status
@@ -2388,7 +2406,6 @@ class WaypointFollower(AtomicBehavior):
 
         check_run = operator.attrgetter("running_WF_actor_{}".format(self._actor.id))
         active_wf = check_run(py_trees.blackboard.Blackboard())
-
         # Termination of WF if the WFs unique_id is listed in terminate_wf
         # only one WF should be active, therefore all previous WF have to be terminated
         if self._unique_id in terminate_wf:
