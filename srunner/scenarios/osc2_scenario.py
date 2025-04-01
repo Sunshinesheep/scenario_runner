@@ -49,8 +49,7 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (
     LaneChange,
     UniformAcceleration,
     WaypointFollower,
-    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset, SetBM, IniBM, SetBehaviorLogic,
-    WaypointFollower2
+    calculate_distance, ChangeActorLateralMotion, ChangeActorLaneOffset, SetBM, IniBM, SetBehaviorLogic
 )
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (
@@ -224,7 +223,6 @@ def process_speed_modifier(
                 max_speed = model_config['max_speed']
                 max_acc = model_config['max_acc']
                 set_bm = IniBM(actor, bm_name, max_speed, max_acc)
-                set_bm = SetBM(actor, 'cautious')
             elif agent_type == 'Script':
                 pass
             father_tree.add_child(set_bm)
@@ -438,20 +436,7 @@ def process_location_modifier(config, modifiers, duration: float, father_tree):
         relative_car_wp = CarlaDataProvider.get_map().get_waypoint(
             relative_car_location
         )
-        try:
-            relative_car_speed = relative_car_conf.get_arg("target_speed")
-        except KeyError:
-            actor = CarlaDataProvider.get_actor_by_name(npc_name)
-            if location in ('ahead_of', 'behind'):
-                distance = modifier.get_distance().gen_physical_value()
-                if location == 'behind':
-                    distance = - distance
-            else:
-                raise RuntimeError("relative position is illegal")
-            # todo: currently lane_opt is fixed
-            wf = WaypointFollower2(actor, relative_car_name, rel_pos=distance, lane_opt='right_of', name='WaypointFollower2')
-            father_tree.add_child(wf)
-            return
+        relative_car_speed = relative_car_conf.get_arg("target_speed")
 
         distance_will_drive = relative_car_speed * float(duration)
         LOG_WARNING(f"{relative_car_name} drive distance = {distance_will_drive}")
