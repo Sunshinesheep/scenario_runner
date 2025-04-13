@@ -309,7 +309,14 @@ extensionMemberDecl
 
 //----------------------------------------
 // globalParameterDeclaration
-globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue)? (parameterWithDeclaration | NEWLINE);
+globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue | '=' stateDeclaration)? (parameterWithDeclaration | NEWLINE);
+
+
+//State declarations
+stateDeclaration :
+    stateExp
+    NEWLINE ;
+
 
 //Type declarations
 typeDeclarator : nonAggregateTypeDeclarator | aggregateTypeDeclarator;
@@ -556,6 +563,9 @@ valueExp
 	| listConstructor
 	| rangeConstructor;
 
+stateExp
+    : StateLiteral;
+
 listConstructor : OPEN_BRACK expression (',' expression)* CLOSE_BRACK;
 rangeConstructor 
 	: 'range' OPEN_PAREN expression ',' expression CLOSE_PAREN 
@@ -628,7 +638,6 @@ OPEN_BRACK : '[' {self.opened += 1}  ;
 CLOSE_BRACK : ']' {self.opened -= 1}  ;
 OPEN_PAREN : '(' {self.opened += 1}  ;
 CLOSE_PAREN : ')' {self.opened -= 1}  ;
- 
 
 SKIP_
  : (SPACES | LINE_JOINING)
@@ -658,6 +667,8 @@ LINE_COMMENT
     :   '#' ~[\r\n\f]*
         -> skip
     ;
+
+StateLiteral : ('{' LongstringElem+ '}' ) ;
 
 StringLiteral
 	:   Shortstring 
@@ -1080,6 +1091,8 @@ fragment IdStartChar:
 fragment IdChar:
 	IdStartChar
 	| [0-9]
+	| '\u007B'
+	| '\u007D'
 	| [\u0300-\u036F]
 	| [\u0483-\u0486]
 	| [\u0591-\u05B9]

@@ -199,8 +199,6 @@ class SetBehaviorLogic(AtomicBehavior):
 
         super(SetBehaviorLogic, self).__init__(name, actor)
         self._agent = None
-        self.timestamp = None
-        self.input_data = None
         self.agent = None
         self.route = None
         self._target_agent = None
@@ -239,26 +237,19 @@ class SetBehaviorLogic(AtomicBehavior):
         map = CarlaDataProvider.get_map()
         _start_position = self._start_position
         _start_wp = map.get_waypoint(_start_position)
-        # _end_wp = _start_wp.next(10)
-        # _end_position = _end_wp[0].transform.location
-        # gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
-        #                                                              _end_position],
-        #                                                hop_resolution=1.0)
+
         if self.change:
             if self.change == 'left':
-                _mid_wp = _start_wp.next(30)[0].get_left_lane()
+                _end_wp = _start_wp.next(self._end_position)[0].get_left_lane()
             else:
-                _mid_wp = _start_wp.next(30)[0].get_right_lane()
-            _mid_location = _mid_wp.transform.location
-            _end_wp = _mid_wp.next(50)
-            _end_position = _end_wp[0].transform.location
-            gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
-                                                                         _mid_location,_end_position],
+                _end_wp = _start_wp.next(self._end_position)[0].get_right_lane()
+
+            _end_position = _end_wp.transform.location
+            gps_route, self.route = interpolate_trajectory(self._world, [_start_position, _end_position],
                                                            hop_resolution=1.0)
         else:
-            _mid_wp = None
-            _end_wp = _start_wp.next(150)
-            _end_position = _end_wp[0].transform.location
+            _end_wp = _start_wp.next(self._end_position)[0]
+            _end_position = _end_wp.transform.location
             gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
                                                                          _end_position],
                                                            hop_resolution=1.0)
@@ -2518,7 +2509,6 @@ class LaneChange(WaypointFollower):
 
     def __init__(self, actor, speed=10, direction='left', distance_same_lane=5, distance_other_lane=100,
                  distance_lane_change=25, lane_changes=1, name='LaneChange'):
-
         self._direction = direction
         self._distance_same_lane = distance_same_lane
         self._distance_other_lane = distance_other_lane
@@ -2533,7 +2523,6 @@ class LaneChange(WaypointFollower):
         super(LaneChange, self).__init__(actor, target_speed=speed, name=name)
 
     def initialise(self):
-
         # get start position
         position_actor = CarlaDataProvider.get_map().get_waypoint(self._actor.get_location())
 
@@ -2564,6 +2553,24 @@ class LaneChange(WaypointFollower):
         else:
             self._pos_before_lane_change = current_position_actor.transform.location
 
+        return status
+
+class FollowCar(WaypointFollower):
+    def __init__(self, actor, speed=None, rel_distance=10, name='FollowCar'):
+        self.ego_vehicle = None
+        self._rel_distance = rel_distance
+        super(FollowCar, self).__init__(actor,target_speed=speed, name=name)
+
+    def initialise(self):
+        self.ego_vehicle = CarlaDataProvider.get_actor_by_name('ego_vehicle')
+        super(FollowCar, self).initialise()
+
+    def update(self):
+        status = super(FollowCar, self).update()
+        current_ego_position = CarlaDataProvider.get_location(self.ego_vehicle)
+        current_car_position = CarlaDataProvider.get_location(self._actor)
+        if abs(calculate_distance(current_ego_position, current_car_position)) < self._rel_distance:
+            status = py_trees.common.Status.SUCCESS
         return status
 
 

@@ -507,6 +507,28 @@ class GlobalParameterDeclaration(Declaration):
             return visitor.visit_children(self)
 
 
+class StateDeclaration(Declaration):
+    def __init__(self, field_name, field_type):
+        super().__init__()
+        self.field_name = field_name
+        self.field_type = field_type
+        self.set_children(field_name)
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_state_declaration"):
+            listener.enter_global_parameter_declaration(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_state_declaration"):
+            listener.exit_global_parameter_declaration(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_state_declaration"):
+            return visitor.visit_global_parameter_declaration(self)
+        else:
+            return visitor.visit_children(self)
+
+
 class ParameterDeclaration(Declaration):
     def __init__(self, field_name, field_type):
         super().__init__()

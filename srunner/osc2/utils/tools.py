@@ -54,3 +54,12 @@ def is_multi_name(names):
         return True
     else:
         return False
+
+def find_direction(start_lane, end_lane):
+    if start_lane > end_lane:
+        direction = "left"
+    elif start_lane < end_lane:
+        direction = "right"
+    else:
+        direction = None
+    return direction

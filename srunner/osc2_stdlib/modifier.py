@@ -1,6 +1,6 @@
 import random
 import sys
-from time import sleep
+import re
 
 from srunner.osc2_dm.physical_types import Physical
 from srunner.osc2_stdlib.misc_object import AVCarSide, ScenarioEvent
@@ -344,6 +344,8 @@ class SetBMModifier(Modifier):
 
     def get_hyperparameters(self):
         para = self.args['hyperparameters']
+        if para == "Default":
+            return para
         pairs = [pair.strip().split('=') for pair in para.split(',')]
         result = {k.strip(): int(v.strip()) for k, v in pairs}
         return result
@@ -374,7 +376,7 @@ class SetBehaviorLogicModifier(Modifier):
         return distance
 
     def get_end_distance(self):
-        para = self.args['position_start'].replace(" ","")
+        para = self.args['position_end'].replace(" ","")
         p = para.split(',')
         distance = int(p[0])
         d = p[1].strip()
@@ -382,3 +384,78 @@ class SetBehaviorLogicModifier(Modifier):
         if direction == 'behind':
             distance = -distance
         return distance
+
+def smart_split(s):
+    result = []
+    current = ''
+    in_quotes = False
+
+    for char in s:
+        if char == '"':
+            in_quotes = not in_quotes
+            continue
+        if char == ',' and not in_quotes:
+            result.append(current.strip())
+            current = ''
+        else:
+            current += char
+
+    if current:
+        result.append(current.strip())
+    return result
+
+class KeepStateModifier(Modifier):
+    def __init__(self, actor_name, name):
+        super().__init__(actor_name, name)
+
+    def get_behavior_model(self):
+        para = self.args['para']
+        match = re.search(r'set_behavior_model\((.*?)\)', para, re.DOTALL)
+        params = match.group(1)
+        param = smart_split(params)
+        param_dict = {}
+        for part in param:
+            key, value = part.split(':')
+            param_dict[key.strip()] = value.strip()
+        behavior_type = param_dict['behavior_type']
+        model_name = param_dict['model']
+        hy = param_dict['hyperparameters']
+        pairs = [pair.strip().split('=') for pair in hy.split(',')]
+        hyperparameters = {k.strip(): int(v.strip()) for k, v in pairs}
+        return behavior_type, model_name, hyperparameters
+
+    def get_initial_state(self):
+        para = self.args['para']
+        match = re.search(r'initial_state\s*:\s*\{(.*?)\}', para, re.DOTALL)
+        params = match.group(1)
+        result = {}
+        lines = params.split(',')
+        for part in lines:
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().strip('"')
+                value = value.strip().strip('"')
+                if value.endswith('m') and value[:-1].strip().isdigit():
+                    value = int(value[:-1].strip())
+                elif value.isdigit():
+                    value = int(value)
+                result[key] = value
+        return result
+
+    def get_target_state(self):
+        para = self.args['para']
+        match = re.search(r'target_state\s*:\s*\{(.*?)\}', para, re.DOTALL)
+        params = match.group(1)
+        result = {}
+        lines = params.split(',')
+        for part in lines:
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().strip('"')
+                value = value.strip().strip('"')
+                if value.endswith('m') and value[:-1].strip().isdigit():
+                    value = int(value[:-1].strip())
+                elif value.isdigit():
+                    value = int(value)
+                result[key] = value
+        return result

@@ -938,6 +938,8 @@ class ASTBuilder(OpenSCENARIO2Listener):
         defaultValue = None
         if ctx.defaultValue():
             defaultValue = ctx.defaultValue().getText()
+        elif ctx.stateDeclaration():
+            defaultValue = ctx.stateDeclaration().getText()
         field_type = ctx.typeDeclarator().getText()
         self.__node_stack.append(self.__cur_node)
         field_name = []
@@ -969,6 +971,14 @@ class ASTBuilder(OpenSCENARIO2Listener):
     ):
         self.__cur_node = self.__node_stack.pop()
         self.__current_scope = self.__current_scope.get_enclosing_scope()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def enterStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def exitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        pass
 
     # Enter a parse tree produced by OpenSCENARIO2Parser#typeDeclarator.
     def enterTypeDeclarator(self, ctx: OpenSCENARIO2Parser.TypeDeclaratorContext):
@@ -2371,6 +2381,14 @@ class ASTBuilder(OpenSCENARIO2Listener):
     # Exit a parse tree produced by OpenSCENARIO2Parser#valueExp.
     def exitValueExp(self, ctx: OpenSCENARIO2Parser.ValueExpContext):
         self.__cur_node = self.__node_stack.pop()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#stateExp.
+    def enterStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#stateExp.
+    def exitStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
+        pass
 
     # Enter a parse tree produced by OpenSCENARIO2Parser#listConstructor.
     def enterListConstructor(self, ctx: OpenSCENARIO2Parser.ListConstructorContext):
