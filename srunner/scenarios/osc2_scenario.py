@@ -137,6 +137,7 @@ def para_type_str_sequence(config, arguments, line, column, node):
         pass
     return retrieval_name
 
+ego_distance = 0
 
 def process_speed_modifier(
     config, modifiers, duration: float, all_duration: float, father_tree
@@ -144,7 +145,7 @@ def process_speed_modifier(
     if not modifiers:
         return
 
-    ego_distance = 200
+    global ego_distance
     is_model = {}
 
     for modifier in modifiers:
@@ -288,19 +289,19 @@ def process_speed_modifier(
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
             agent_type, bm_name, model_config = modifier.get_behavior_model()
             if agent_type == 'AI':
-                max_speed = model_config['max_speed']
-                max_acc = model_config['max_acc']
+                max_speed = model_config.get('max_speed', 5)
+                max_acc = model_config.get('max_acc')
                 set_bm =  IniBM(actor, bm_name, max_speed, max_acc)
             elif agent_type == 'Script':
                 pass
             father_tree.add_child(set_bm)
-            start_state = modifier.get_initial_state()
-            target_state = modifier.get_target_state()
-            start_lane = start_state['lane']
-            start_location = start_state['position']
-            end_lane = target_state['lane']
-            end_location = target_state['position']
+            logic_params = modifier.get_logic()
+            start_lane = logic_params['lane_start']
+            start_location = logic_params['position_start']
+            end_lane = logic_params['lane_end']
+            end_location = logic_params['position_end']
             distance = end_location - start_location
+            ego_distance = distance
             wp = CarlaDataProvider.get_waypoint_by_laneid(start_lane)
             start_position = wp.transform.location
             if wp:

@@ -385,7 +385,29 @@ class SetBehaviorLogicModifier(Modifier):
             distance = -distance
         return distance
 
-def smart_split(s):
+def split_for_model(s):
+    result = []
+    current = ''
+    in_quotes = False
+
+    for char in s:
+        if char == '{':
+            in_quotes = True
+            continue
+        if char == '}':
+            in_quotes = False
+            continue
+        if char == ',' and not in_quotes:
+            result.append(current.strip())
+            current = ''
+        else:
+            current += char
+
+    if current:
+        result.append(current.strip())
+    return result
+
+def split_for_logic(s):
     result = []
     current = ''
     in_quotes = False
@@ -410,52 +432,40 @@ class KeepStateModifier(Modifier):
 
     def get_behavior_model(self):
         para = self.args['para']
-        match = re.search(r'set_behavior_model\((.*?)\)', para, re.DOTALL)
+        match = re.search(r'model\s*=\s\{(.*?)\n\s*\}', para, re.DOTALL)
         params = match.group(1)
-        param = smart_split(params)
+        param = split_for_model(params)
         param_dict = {}
         for part in param:
-            key, value = part.split(':')
-            param_dict[key.strip()] = value.strip()
+            key, value = part.split(':', maxsplit=1)
+            param_dict[key.strip()] = value.strip().strip('"').strip('{}')
         behavior_type = param_dict['behavior_type']
-        model_name = param_dict['model']
+        model_name = param_dict['model_name']
         hy = param_dict['hyperparameters']
-        pairs = [pair.strip().split('=') for pair in hy.split(',')]
+        pairs = [pair.strip().split(':') for pair in hy.split(',')]
         hyperparameters = {k.strip(): int(v.strip()) for k, v in pairs}
         return behavior_type, model_name, hyperparameters
 
-    def get_initial_state(self):
+    def get_logic(self):
         para = self.args['para']
-        match = re.search(r'initial_state\s*:\s*\{(.*?)\}', para, re.DOTALL)
+        match = re.search(r'logic_params\s*:\s*\{(.*?)}', para, re.DOTALL)
         params = match.group(1)
+        lines = split_for_logic(params)
         result = {}
-        lines = params.split(',')
         for part in lines:
             if ':' in part:
                 key, value = part.split(':', 1)
                 key = key.strip().strip('"')
                 value = value.strip().strip('"')
-                if value.endswith('m') and value[:-1].strip().isdigit():
-                    value = int(value[:-1].strip())
-                elif value.isdigit():
-                    value = int(value)
-                result[key] = value
-        return result
-
-    def get_target_state(self):
-        para = self.args['para']
-        match = re.search(r'target_state\s*:\s*\{(.*?)\}', para, re.DOTALL)
-        params = match.group(1)
-        result = {}
-        lines = params.split(',')
-        for part in lines:
-            if ':' in part:
-                key, value = part.split(':', 1)
-                key = key.strip().strip('"')
-                value = value.strip().strip('"')
-                if value.endswith('m') and value[:-1].strip().isdigit():
-                    value = int(value[:-1].strip())
-                elif value.isdigit():
-                    value = int(value)
-                result[key] = value
+                value_temp = value.split(',')[0]
+                if value_temp.endswith('m') and value_temp[:-1].strip().isdigit():
+                    value_fin = int(value_temp[:-1].strip())
+                elif value_temp.strip().isdigit():
+                    value_fin = int(value_temp)
+                else:
+                    value_fin = None
+                if "global_start" in value:
+                    result[key+'_start'] = value_fin
+                elif "global_end" in value:
+                    result[key+'_end'] = value_fin
         return result
