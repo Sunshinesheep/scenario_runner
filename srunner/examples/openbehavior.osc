@@ -1,6 +1,6 @@
 import basic.osc
 
-global global_state: state={
+global global_state: {
     ego_vehicle: {
     	model = {
         	model_name: "Interfuser",

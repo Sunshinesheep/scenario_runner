@@ -936,11 +936,13 @@ class ASTBuilder(OpenSCENARIO2Listener):
         self, ctx: OpenSCENARIO2Parser.GlobalParameterDeclarationContext
     ):
         defaultValue = None
+        field_type = 'state'
+        if ctx.typeDeclarator():
+            field_type = ctx.typeDeclarator().getText()
         if ctx.defaultValue():
             defaultValue = ctx.defaultValue().getText()
         elif ctx.stateDeclaration():
             defaultValue = ctx.stateDeclaration().getText()
-        field_type = ctx.typeDeclarator().getText()
         self.__node_stack.append(self.__cur_node)
         field_name = []
         multi_field_name = ""
@@ -1253,9 +1255,13 @@ class ASTBuilder(OpenSCENARIO2Listener):
         self, ctx: OpenSCENARIO2Parser.ParameterDeclarationContext
     ):
         defaultValue = None
+        field_type = 'state'
+        if ctx.typeDeclarator():
+            field_type = ctx.typeDeclarator().getText()
         if ctx.defaultValue():
             defaultValue = ctx.defaultValue().getText()
-        field_type = ctx.typeDeclarator().getText()
+        elif ctx.stateDeclaration():
+            defaultValue = ctx.stateDeclaration().getText()
         self.__node_stack.append(self.__cur_node)
         field_name = []
 

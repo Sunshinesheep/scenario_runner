@@ -309,7 +309,7 @@ extensionMemberDecl
 
 //----------------------------------------
 // globalParameterDeclaration
-globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue | '=' stateDeclaration)? (parameterWithDeclaration | NEWLINE);
+globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' ((typeDeclarator ('=' defaultValue)?) |stateDeclaration) (parameterWithDeclaration | NEWLINE);
 
 
 //State declarations
@@ -379,7 +379,7 @@ fieldDeclaration
 //parameter-declaration ::= field-name (',' field-name)* ':' type-declarator ['=' default-value] [parameter-with-declaration] NEWLINE
 //[improvement:] parameterWithDeclaration? NEWLINE -> (parameterWithDeclaration | NEWLINE)
 parameterDeclaration 
-	: fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue)? (parameterWithDeclaration | NEWLINE); 
+	: fieldName (',' fieldName)* ':' ((typeDeclarator ('=' defaultValue)?) |stateDeclaration) (parameterWithDeclaration | NEWLINE);
 
 variableDeclaration 
 	: 'var' fieldName (',' fieldName)* ':' typeDeclarator ('=' (sampleExpression | valueExp) )? NEWLINE;
