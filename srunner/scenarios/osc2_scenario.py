@@ -137,7 +137,7 @@ def para_type_str_sequence(config, arguments, line, column, node):
         pass
     return retrieval_name
 
-ego_distance = 0
+ego_distance = 100
 
 def process_speed_modifier(
     config, modifiers, duration: float, all_duration: float, father_tree
@@ -235,7 +235,7 @@ def process_speed_modifier(
                 if bm_name == "internal_npc":
                     is_model[actor_name] = False
                 elif bm_name == "CARLA_Traffic_Manager":
-                    is_model[actor_name] = False
+                    is_model[actor_name] = True
                     pass
 
         elif isinstance(modifier, SetBehaviorLogicModifier):
@@ -244,48 +244,87 @@ def process_speed_modifier(
             end_lane = modifier.get_end_lane()
             start_distance = modifier.get_start_distance()
             end_distance = modifier.get_end_distance()
+            lane_change = modifier.get_lane_change()
+            speed_value = modifier.get_speed()
             ego_car_conf = config.get_car_config("ego_vehicle")
             ego_car_location = ego_car_conf.get_transform().location
             ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
-            if start_distance < 0:
-                wp_lists = ego_car_wp.previous(-start_distance)
-            else:
-                wp_lists = ego_car_wp.next(start_distance)
-            start_wp = wp_lists[0]
-            start_position = start_wp.transform.location
-            npc_spawn = ActorTransformSetter(actor, start_wp.transform)
-            father_tree.add_child(npc_spawn)
-            if is_model[actor_name]:
-                set_behavior_logic = SetBehaviorLogic(actor, start_position, end_distance, start_lane, end_lane)
-                father_tree.add_child(set_behavior_logic)
-            else:
-                # # Get the global route planner, used to calculate the route
-                # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
-                # grp = GlobalRoutePlanner(dao)
-                # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
-                # distance = calculate_distance(
-                #     start_position, end_position, grp
-                # )
-                distance = end_distance - start_distance + ego_distance
-                car_need_speed = distance/ float(duration)
-                car_driving = FollowCar(actor, car_need_speed)
-                father_tree.add_child(car_driving)
+            if start_distance is not None:
+                if start_distance < 0:
+                    wp_lists = ego_car_wp.previous(-start_distance)
+                else:
+                    wp_lists = ego_car_wp.next(start_distance)
+                start_wp = wp_lists[0]
+                start_position = start_wp.transform.location
+                npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+                father_tree.add_child(npc_spawn)
+                if end_distance is not None:
+                    if is_model[actor_name]:
+                        set_behavior_logic = SetBehaviorLogic(actor, start_position, end_distance, start_lane, end_lane)
+                        father_tree.add_child(set_behavior_logic)
+                    else:
+                        # # Get the global route planner, used to calculate the route
+                        # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                        # grp = GlobalRoutePlanner(dao)
+                        # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                        # distance = calculate_distance(
+                        #     start_position, end_position, grp
+                        # )
+                        distance = end_distance - start_distance + ego_distance
+                        car_need_speed = distance / float(duration)
+                        car_driving = FollowCar(actor, car_need_speed)
+                        father_tree.add_child(car_driving)
 
-                direction = tools.find_direction(start_lane, end_lane)
-                if direction is not None:
-                    lane_change = LaneChange(
-                        actor,
-                        speed=car_need_speed,
-                        direction=direction,
-                        distance_same_lane=5,
-                        distance_other_lane=10,
-                    )
-                    father_tree.add_child(lane_change)
+                        direction = tools.find_direction(start_lane, end_lane)
+                        if direction is not None:
+                            lane_change = LaneChange(
+                                actor,
+                                speed=car_need_speed,
+                                direction=direction,
+                                distance_same_lane=5,
+                                distance_other_lane=10,
+                            )
+                            father_tree.add_child(lane_change)
 
-                continue_drive = WaypointFollower(actor, car_need_speed)
+                        continue_drive = WaypointFollower(actor, car_need_speed)
+                        father_tree.add_child(continue_drive)
+                elif speed_value is not None:
+                    start_drive = WaypointFollower(actor, speed_value)
+                    father_tree.add_child(start_drive)
+                else:
+                    raise RuntimeError("car can not get speed")
+            elif speed_value is not None:
+                if lane_change is not None:
+                    if lane_change < 0:
+                        change_direction = "left"
+                    else:
+                        change_direction = "right"
+                    lane_num = abs(lane_change)
+                    change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                    father_tree.add_child(change_lane)
+                continue_drive = WaypointFollower(actor, speed_value)
                 father_tree.add_child(continue_drive)
+            elif lane_change is not None:
+                if lane_change < 0:
+                    change_direction = "left"
+                else:
+                    change_direction = "right"
+                lane_num = abs(lane_change)
+                change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                continue_drive = WaypointFollower(actor)
+                father_tree.add_child(change_lane)
+                father_tree.add_child(continue_drive)
+            else:
+                raise RuntimeError("nothing to set the car")
+
+            # t = start_wp.transform
+            # t.rotation.yaw = 80
 
         elif isinstance(modifier, KeepStateModifier):
+            if actor_name == 'ego_vehicle':
+                global_priority = True
+            else:
+                global_priority = False
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
             agent_type, bm_name, model_config = modifier.get_behavior_model()
             if agent_type == 'AI':
@@ -311,8 +350,13 @@ def process_speed_modifier(
                 father_tree.add_child(actor_visible)
             else:
                 raise RuntimeError(f"no valid position to spawn {actor_name} car")
-            set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
+            set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane, global_priority)
             father_tree.add_child(set_behavior_logic)
+            if global_priority:
+                pass
+            else:
+                follow_drive = WaypointFollower(actor, 15)
+                father_tree.add_child(follow_drive)
         else:
             LOG_WARNING("not implement modifier")
 
@@ -1268,10 +1312,16 @@ class OSC2Scenario(BasicScenario):
                             arguments = OSC2Helper.flat_list(arguments)
                             for arg in arguments:
                                 if isinstance(arg, tuple):
-                                    if "start" in arg[1]:
+                                    if isinstance(arg[1], Physical):
+                                        keyword_args[arg[0]] = arg[1]
+                                    elif "start" in arg[1]:
                                         keyword_args[arg[0] + "_start"] = arg[1]
-                                    else:
+                                    elif "end" in arg[1]:
                                         keyword_args[arg[0] + "_end"] = arg[1]
+                                    else:
+                                        keyword_args[arg[0]] = arg[1]
+                        elif isinstance(arguments, tuple):
+                            keyword_args[arguments[0]] = arguments[1]
                         else:
                             raise NotImplementedError(
                                 f"no implement argument of {modifier_name}"

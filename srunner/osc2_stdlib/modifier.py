@@ -356,17 +356,26 @@ class SetBehaviorLogicModifier(Modifier):
         super().__init__(actor_name, name)
 
     def get_start_lane(self):
-        para = self.args["lane_start"].replace(" ","")
+        para = self.args.get("lane_start")
+        if not para:
+            return None
+        para.replace(" ", "")
         lane_start = int(para[0])
         return lane_start
 
     def get_end_lane(self):
-        para = self.args["lane_end"].replace(" ", "")
+        para = self.args.get("lane_end")
+        if not para:
+            return None
+        para.replace(" ", "")
         lane_end = int(para[0])
         return lane_end
 
     def get_start_distance(self):
-        para = self.args['position_start'].replace(" ", "")
+        para = self.args.get('position_start')
+        if not para:
+            return None
+        para.replace(" ", "")
         p = para.split(',')
         distance = int(p[0])
         d = p[1].strip()
@@ -376,7 +385,10 @@ class SetBehaviorLogicModifier(Modifier):
         return distance
 
     def get_end_distance(self):
-        para = self.args['position_end'].replace(" ","")
+        para = self.args.get('position_end')
+        if not para:
+            return None
+        para.replace(" ", "")
         p = para.split(',')
         distance = int(p[0])
         d = p[1].strip()
@@ -384,6 +396,31 @@ class SetBehaviorLogicModifier(Modifier):
         if direction == 'behind':
             distance = -distance
         return distance
+
+    def get_speed(self):
+        speed_value = self.args.get("speed")
+        if not speed_value:
+            return None
+        if isinstance(speed_value, Physical):
+            return Physical(speed_value.gen_single_value(), speed_value.unit).gen_physical_value()
+        else:
+            print("[Error] 'speed' parameter of SpeedModifier must be 'Physical' type")
+            sys.exit(1)
+
+
+    def get_lane_change(self):
+        para = self.args.get('change_lane')
+        if not para:
+            return None
+        part = para.split(',')
+        param_dict = {}
+        for p in part:
+            key, value = p.split(':')
+            param_dict[key.strip()] = value.strip()
+        if param_dict.get('side') == 'left':
+            return -int(param_dict['lane_changes'])
+        else:
+            return int(param_dict['lane_changes'])
 
 def split_for_model(s):
     result = []

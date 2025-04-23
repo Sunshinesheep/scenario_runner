@@ -195,18 +195,20 @@ class SetBehaviorLogic(AtomicBehavior):
     """
     set an agent that control the vehicle
     """
-    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, name="Set_Behavior_Logic"):
+    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, global_priority=True, name="Set_Behavior_Logic"):
 
         super(SetBehaviorLogic, self).__init__(name, actor)
         self._agent = None
         self.agent = None
         self.route = None
+        self.global_priority = global_priority
         self._target_agent = None
         self._max_speed = None
         self._max_acc = None
         self._world = CarlaDataProvider.get_world()
         self._start_position = start_position
         self._end_position = end_distance
+        self.end_position = None
         self.logger.debug("%s.__init__()" % (self.__class__.__name__))
         self.change = None
         if start_lane > end_lane:
@@ -253,6 +255,7 @@ class SetBehaviorLogic(AtomicBehavior):
             gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
                                                                          _end_position],
                                                            hop_resolution=1.0)
+        self.end_position = _end_position
         self.agent = InterfuserAgent("/home/lhy/scenario_runner/leaderboard/team_code/interfuser_config.py")
         self.agent.config.max_speed = self._max_speed
         self.agent.config.max_acc = self._max_acc
@@ -265,17 +268,15 @@ class SetBehaviorLogic(AtomicBehavior):
 
     def update(self):
         new_status = py_trees.common.Status.RUNNING
-        # map = CarlaDataProvider.get_map()
-        # _start_position = CarlaDataProvider.get_location(self._actor)
-        # _start_wp = map.get_waypoint(_start_position)
-        # _end_wp = _start_wp.next(20)
-        # _end_position = _end_wp[0].transform.location
-        # gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
-        #                                                              _end_position],
-        #                                                hop_resolution=1.0)
-        # self.agent.set_global_plan(gps_route, self.route)
 
         self._actor.apply_control(self._agent())
+        current_location = CarlaDataProvider.get_location(self._actor)
+        if calculate_distance(current_location, self.end_position) < 2.0 and CarlaDataProvider.get_velocity(self._actor) < 1.0:
+            # 此失败仅仅是为了终止整个行为树，并非真实的行为失败
+            if self.global_priority:
+                new_status = py_trees.common.Status.FAILURE
+            else:
+                new_status = py_trees.common.Status.SUCCESS
 
         self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
         return new_status
@@ -2507,7 +2508,7 @@ class LaneChange(WaypointFollower):
     A parallel termination behavior has to be used.
     """
 
-    def __init__(self, actor, speed=10, direction='left', distance_same_lane=5, distance_other_lane=100,
+    def __init__(self, actor, speed=10, direction='left', distance_same_lane=5, distance_other_lane=20,
                  distance_lane_change=25, lane_changes=1, name='LaneChange'):
         self._direction = direction
         self._distance_same_lane = distance_same_lane
@@ -2556,7 +2557,7 @@ class LaneChange(WaypointFollower):
         return status
 
 class FollowCar(WaypointFollower):
-    def __init__(self, actor, speed=None, rel_distance=10, name='FollowCar'):
+    def __init__(self, actor, speed=None, rel_distance=15, name='FollowCar'):
         self.ego_vehicle = None
         self._rel_distance = rel_distance
         super(FollowCar, self).__init__(actor,target_speed=speed, name=name)
