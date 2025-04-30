@@ -57,6 +57,24 @@ class ASTListener:
     def exit_struct_declaration(self, node: ast_node.StructDeclaration):
         pass
 
+    def enter_judge_exp(self, node: ast_node.judgeExp):
+        pass
+
+    def exit_judge_exp(self, node: ast_node.judgeExp):
+        pass
+
+    def enter_judge_declaration(self, node: ast_node.judgeDeclaration):
+        pass
+
+    def exit_judge_declaration(self, node: ast_node.judgeDeclaration):
+        pass
+
+    def enter_logic_declaration(self, node: ast_node.logicDeclaration):
+        pass
+
+    def exit_logic_declaration(self, node: ast_node.logicDeclaration):
+        pass
+
     def enter_struct_inherts(self, node: ast_node.StructInherts):
         pass
 

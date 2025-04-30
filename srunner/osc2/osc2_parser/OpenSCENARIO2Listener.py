@@ -440,15 +440,6 @@ class OpenSCENARIO2Listener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
-    def enterStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
-        pass
-
-    # Exit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
-    def exitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
-        pass
-
-
     # Enter a parse tree produced by OpenSCENARIO2Parser#typeDeclarator.
     def enterTypeDeclarator(self, ctx:OpenSCENARIO2Parser.TypeDeclaratorContext):
         pass
@@ -1061,6 +1052,33 @@ class OpenSCENARIO2Listener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def enterJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def exitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def enterJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def exitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def enterLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def exitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        pass
+
+
     # Enter a parse tree produced by OpenSCENARIO2Parser#ternaryOpExp.
     def enterTernaryOpExp(self, ctx:OpenSCENARIO2Parser.TernaryOpExpContext):
         pass
@@ -1277,12 +1295,12 @@ class OpenSCENARIO2Listener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by OpenSCENARIO2Parser#stateExp.
-    def enterStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
+    # Enter a parse tree produced by OpenSCENARIO2Parser#dictLiteral.
+    def enterDictLiteral(self, ctx:OpenSCENARIO2Parser.DictLiteralContext):
         pass
 
-    # Exit a parse tree produced by OpenSCENARIO2Parser#stateExp.
-    def exitStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
+    # Exit a parse tree produced by OpenSCENARIO2Parser#dictLiteral.
+    def exitDictLiteral(self, ctx:OpenSCENARIO2Parser.DictLiteralContext):
         pass
 
 
@@ -1337,6 +1355,15 @@ class OpenSCENARIO2Listener(ParseTreeListener):
 
     # Exit a parse tree produced by OpenSCENARIO2Parser#argumentName.
     def exitArgumentName(self, ctx:OpenSCENARIO2Parser.ArgumentNameContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeName.
+    def enterJudgeName(self, ctx:OpenSCENARIO2Parser.JudgeNameContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeName.
+    def exitJudgeName(self, ctx:OpenSCENARIO2Parser.JudgeNameContext):
         pass
 
 

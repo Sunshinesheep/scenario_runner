@@ -1,4 +1,8 @@
+from dataclasses import field
+from logging.config import listen
 from typing import List
+
+from graphql import visit
 
 
 class AST(object):
@@ -778,6 +782,63 @@ class recordDeclaration(Declaration):
         else:
             return visitor.visit_children(self)
 
+class judgeExp(AST):
+    def __init__(self):
+        super().__init__()
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_judge_exp"):
+            listener.enter_judge_exp(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_judge_exp"):
+            listener.exit_judge_exp(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_judge_exp"):
+            return visitor.visit_judge_exp(self)
+        else:
+            return visitor.visit_children(self)
+
+
+class judgeDeclaration(Declaration):
+    def __init__(self, judge_name, value_exp):
+        super().__init__()
+        self.judge_name = judge_name
+        self.value_exp = value_exp
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_judge_delection"):
+            listener.enter_judge_declaration(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_judge_delection"):
+            listener.exit_judge_declaration(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_judge_delection"):
+            return visitor.visit_judge_declaration(self)
+        else:
+            return visitor.visit_children(self)
+
+class logicDeclaration(Declaration):
+    def __init__(self, field_name):
+        super().__init__()
+        self.field_name = field_name
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_logic_declaration"):
+            listener.enter_logic_declaration(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_logic_declaration"):
+            listener.exit_logic_declaration(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_logic_declaration"):
+            return visitor.visit_logic_declaration(self)
+        else:
+            return visitor.visit_children(self)
 
 class Argument(AST):
     def __init__(self, argument_name, argument_type, default_value):

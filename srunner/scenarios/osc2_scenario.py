@@ -6,9 +6,12 @@ import operator
 import random
 import re
 import sys
+from dataclasses import field
 from typing import List, Tuple
 
 import py_trees
+from torchgen.api.native import arguments
+
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
 from srunner.osc2.ast_manager import ast_node
@@ -1672,6 +1675,25 @@ class OSC2Scenario(BasicScenario):
                     {para_name[0]: self.father_ins.struct_declaration[para_type]}
                 )
 
+        def visit_judge_exp(self, node: ast_node.judgeExp):
+            for child in node.get_children():
+                if isinstance(child, ast_node.judgeDeclaration):
+                    name, value = self.visit_judge_declaration(child)
+            return
+
+        def visit_judge_declaration(self, node: ast_node.judgeDeclaration):
+            arguments = self.visit_children(node)
+            print(arguments)
+            pass
+
+        def visit_logic_declaration(self, node: ast_node.logicDeclaration):
+            field_name = node.field_name
+            arguments = self.visit_children(node)
+
+            # argument 待处理
+
+            return field_name, arguments
+
         def visit_method_declaration(self, node: ast_node.MethodDeclaration):
             pass
 
@@ -1730,6 +1752,8 @@ class OSC2Scenario(BasicScenario):
                 for child in node.get_children():
                     if isinstance(child, ast_node.BinaryExpression):
                         method_value = self.visit_binary_expression(child)
+                    elif isinstance(child, ast_node.judgeExp):
+                        method_value = self.visit_judge_exp(child)
             if method_value is not None:
                 return method_value
             return

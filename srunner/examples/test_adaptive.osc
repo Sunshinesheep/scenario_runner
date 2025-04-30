@@ -1,0 +1,36 @@
+import basic.osc
+import adaptive1.osc
+
+scenario top:
+    path: Path                      # A path in the map
+    path.set_map("Town04")    # specify map to use in this test
+    path.path_min_driving_lanes(2)         # Path should have at least two lanes
+
+    ego_vehicle: Model3                # ego car
+    npc: Rubicon               # The other car
+    npc2: Model3
+
+    event start
+
+    do parallel:
+        ego_vehicle.drive(path) with:
+            speed(20kph)
+        serial(duration: 10s):
+            user_adaptive_npc_bm = adapt_npc_bm.adapt(scenario_mode)
+            parallel(duration: 10s):
+                npc.drive(path) with:
+                    set_behavior_model(behavior_type: Script, model: internal_npc, hyperparameters: Default)
+                    set_behavior_logic(
+                        lane:"3, at:start",
+                        position:"30, behind:ego_vehicle, at:start",
+                        lane:"4, right_of: ego_vehicle, at:end",
+                        position:"20, ahead_of:ego_vehicle, at:end"
+                    )
+
+            next: parallel(duration: 20s):
+                npc.drive(path) with:
+                    set_behavior_model(behavior_type: Script, model: internal_npc, hyperparameters: Default)
+                    set_behavior_logic(
+                        change_lane: "lane_changes:1, side: left",
+                        speed: 10kph
+                    )

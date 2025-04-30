@@ -166,6 +166,12 @@ class OSC2ScenarioConfiguration(ScenarioConfiguration):
             # 场景设置信息不会出现在场景的行为描述部分
             pass
 
+        def visit_judge_declaration(self, node: ast_node.judgeDeclaration):
+            judge_name = node.judge_name
+            value_name = node.value_exp
+
+            pass
+
         def visit_parameter_declaration(self, node: ast_node.ParameterDeclaration):
             para_name = node.field_name[0]
             para_type = ""
@@ -360,6 +366,10 @@ class OSC2ScenarioConfiguration(ScenarioConfiguration):
                         position_args.append(self.father_ins.variables.get(arguments))
                     else:
                         position_args.append(arguments)
+
+        def visit_judge_exp(self, node: ast_node.judgeExp):
+            print("在此路过")
+            pass
 
         def visit_method_declaration(self, node: ast_node.MethodDeclaration):
             pass

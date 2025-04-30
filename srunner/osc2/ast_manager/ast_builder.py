@@ -14,6 +14,7 @@ from srunner.osc2.symbol_manager.enum_symbol import *
 from srunner.osc2.symbol_manager.event_symbol import *
 from srunner.osc2.symbol_manager.global_scope import GlobalScope
 from srunner.osc2.symbol_manager.inherits_condition_symbol import *
+from srunner.osc2.symbol_manager.judge_symbol import JudgeSymbol
 from srunner.osc2.symbol_manager.method_symbol import MethodSymbol
 from srunner.osc2.symbol_manager.modifier_symbol import *
 from srunner.osc2.symbol_manager.parameter_symbol import ParameterSymbol
@@ -941,8 +942,8 @@ class ASTBuilder(OpenSCENARIO2Listener):
             field_type = ctx.typeDeclarator().getText()
         if ctx.defaultValue():
             defaultValue = ctx.defaultValue().getText()
-        elif ctx.stateDeclaration():
-            defaultValue = ctx.stateDeclaration().getText()
+        # elif ctx.stateDeclaration():
+        #     defaultValue = ctx.stateDeclaration().getText()
         self.__node_stack.append(self.__cur_node)
         field_name = []
         multi_field_name = ""
@@ -974,12 +975,64 @@ class ASTBuilder(OpenSCENARIO2Listener):
         self.__cur_node = self.__node_stack.pop()
         self.__current_scope = self.__current_scope.get_enclosing_scope()
 
-    # Enter a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
-    def enterStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def enterJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        self.__node_stack.append(self.__cur_node)
+        node = ast_node.judgeExp()
+        node.set_loc(ctx.start.line, ctx.start.column)
+        node.set_scope(self.__current_scope)
+
+        self.__cur_node.set_children(node)
+        self.__cur_node = node
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def exitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        self.__cur_node = self.__node_stack.pop()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def enterJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        self.__node_stack.append(self.__cur_node)
+        judge_name = None
+        value_exp = ctx.expression().getText()
+
+        judge = JudgeSymbol(judge_name, value_exp, self.__current_scope)
+        self.__current_scope.define(judge, ctx.start)
+        self.__current_scope = judge
+
+        node = ast_node.judgeDeclaration(judge_name, value_exp)
+        node.set_loc(ctx.start.line, ctx.start.column)
+        node.set_scope(self.__current_scope)
+
+        self.__cur_node.set_children(node)
+        self.__cur_node = node
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def exitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        self.__cur_node = self.__node_stack.pop()
+        self.__current_scope = self.__current_scope.get_enclosing_scope()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def enterLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        self.__node_stack.append(self.__cur_node)
+        field_name = ctx.fieldName().getText()
+
+        node = ast_node.logicDeclaration(field_name)
+        node.set_loc(ctx.start.line, ctx.start.column)
+        node.set_scope(self.__current_scope)
+
+        self.__cur_node.set_children(node)
+        self.__cur_node = node
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def exitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        self.__cur_node = self.__node_stack.pop()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#dictLiteral.
+    def enterDictLiteral(self, ctx:OpenSCENARIO2Parser.DictLiteralContext):
         pass
 
-    # Exit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
-    def exitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+    # Exit a parse tree produced by OpenSCENARIO2Parser#dictLiteral.
+    def exitDictLiteral(self, ctx:OpenSCENARIO2Parser.DictLiteralContext):
         pass
 
     # Enter a parse tree produced by OpenSCENARIO2Parser#typeDeclarator.
@@ -1260,8 +1313,8 @@ class ASTBuilder(OpenSCENARIO2Listener):
             field_type = ctx.typeDeclarator().getText()
         if ctx.defaultValue():
             defaultValue = ctx.defaultValue().getText()
-        elif ctx.stateDeclaration():
-            defaultValue = ctx.stateDeclaration().getText()
+        # elif ctx.stateDeclaration():
+        #     defaultValue = ctx.stateDeclaration().getText()
         self.__node_stack.append(self.__cur_node)
         field_name = []
 
@@ -2387,14 +2440,6 @@ class ASTBuilder(OpenSCENARIO2Listener):
     # Exit a parse tree produced by OpenSCENARIO2Parser#valueExp.
     def exitValueExp(self, ctx: OpenSCENARIO2Parser.ValueExpContext):
         self.__cur_node = self.__node_stack.pop()
-
-    # Enter a parse tree produced by OpenSCENARIO2Parser#stateExp.
-    def enterStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
-        pass
-
-    # Exit a parse tree produced by OpenSCENARIO2Parser#stateExp.
-    def exitStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
-        pass
 
     # Enter a parse tree produced by OpenSCENARIO2Parser#listConstructor.
     def enterListConstructor(self, ctx: OpenSCENARIO2Parser.ListConstructorContext):

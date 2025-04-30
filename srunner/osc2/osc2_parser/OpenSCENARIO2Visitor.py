@@ -249,11 +249,6 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
-    def visitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
-        return self.visitChildren(ctx)
-
-
     # Visit a parse tree produced by OpenSCENARIO2Parser#typeDeclarator.
     def visitTypeDeclarator(self, ctx:OpenSCENARIO2Parser.TypeDeclaratorContext):
         return self.visitChildren(ctx)
@@ -594,6 +589,21 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def visitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def visitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def visitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by OpenSCENARIO2Parser#ternaryOpExp.
     def visitTernaryOpExp(self, ctx:OpenSCENARIO2Parser.TernaryOpExpContext):
         return self.visitChildren(ctx)
@@ -714,8 +724,8 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by OpenSCENARIO2Parser#stateExp.
-    def visitStateExp(self, ctx:OpenSCENARIO2Parser.StateExpContext):
+    # Visit a parse tree produced by OpenSCENARIO2Parser#dictLiteral.
+    def visitDictLiteral(self, ctx:OpenSCENARIO2Parser.DictLiteralContext):
         return self.visitChildren(ctx)
 
 
@@ -746,6 +756,11 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by OpenSCENARIO2Parser#argumentName.
     def visitArgumentName(self, ctx:OpenSCENARIO2Parser.ArgumentNameContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeName.
+    def visitJudgeName(self, ctx:OpenSCENARIO2Parser.JudgeNameContext):
         return self.visitChildren(ctx)
 
 

@@ -217,7 +217,8 @@ structDeclaration :
 structInherts : 'inherits' structName (inheritsCondition)? ;
 
 structMemberDecl 
-	:  eventDeclaration 
+	:  eventDeclaration
+	|  enumDeclaration
 	|  fieldDeclaration 
 	|  constraintDeclaration 
 	|  methodDeclaration
@@ -309,13 +310,13 @@ extensionMemberDecl
 
 //----------------------------------------
 // globalParameterDeclaration
-globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' ((typeDeclarator ('=' defaultValue)?) |stateDeclaration) (parameterWithDeclaration | NEWLINE);
+globalParameterDeclaration : 'global' fieldName (',' fieldName)* ':' ((typeDeclarator ('=' defaultValue)?)) (parameterWithDeclaration | NEWLINE);
 
 
-//State declarations
-stateDeclaration :
-    stateExp
-    NEWLINE ;
+////State declarations
+//stateDeclaration :
+//    stateExp
+//    NEWLINE ;
 
 
 //Type declarations
@@ -379,7 +380,7 @@ fieldDeclaration
 //parameter-declaration ::= field-name (',' field-name)* ':' type-declarator ['=' default-value] [parameter-with-declaration] NEWLINE
 //[improvement:] parameterWithDeclaration? NEWLINE -> (parameterWithDeclaration | NEWLINE)
 parameterDeclaration 
-	: fieldName (',' fieldName)* ':' ((typeDeclarator ('=' defaultValue)?) |stateDeclaration) (parameterWithDeclaration | NEWLINE);
+	: fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue)? (parameterWithDeclaration | NEWLINE);
 
 variableDeclaration 
 	: 'var' fieldName (',' fieldName)* ':' typeDeclarator ('=' (sampleExpression | valueExp) )? NEWLINE;
@@ -496,8 +497,19 @@ targetName : Identifier ;
 
 //Expressions
 expression 
-	: implication 
+	: implication
+	| dictLiteral
+	| judgeExp
 	| ternaryOpExp;
+
+judgeExp : judgeDeclaration+ ;
+
+judgeDeclaration : ('if'|'elif') judgeName '==' expression ':' NEWLINE INDENT
+    logicDeclaration+ NEWLINE DEDENT;
+
+logicDeclaration
+    : fieldName '=' '{' NEWLINE INDENT
+        argumentList NEWLINE DEDENT '}';
 
 ternaryOpExp 
 	: implication '?' expression ':' expression;
@@ -563,8 +575,11 @@ valueExp
 	| listConstructor
 	| rangeConstructor;
 
-stateExp
-    : StateLiteral;
+dictLiteral : '{' NEWLINE INDENT argumentList NEWLINE DEDENT '}'
+    ;
+
+//stateExp
+//    : StateLiteral;
 
 listConstructor : OPEN_BRACK expression (',' expression)* CLOSE_BRACK;
 rangeConstructor 
@@ -579,9 +594,11 @@ argumentSpecification : argumentName ':' typeDeclarator ('=' defaultValue)?;
 
 argumentName : Identifier;
 
+judgeName : Identifier ;
+
 argumentList 
 	: positionalArgument (',' positionalArgument)* (',' namedArgument)*
-	| namedArgument (',' namedArgument)*;
+	| namedArgument (','NEWLINE namedArgument)*;
 
 positionalArgument : expression;
 namedArgument : argumentName ':' expression;
@@ -644,7 +661,7 @@ SKIP_
  ->skip
  ;
 
- fragment 
+ fragment
  SPACES
  : [ \t]+
  ;
@@ -668,7 +685,7 @@ LINE_COMMENT
         -> skip
     ;
 
-StateLiteral : ('{' LongstringElem+ '}' ) ;
+//StateLiteral : ('{' LongstringChar+ '}' ) ;
 
 StringLiteral
 	:   Shortstring 
