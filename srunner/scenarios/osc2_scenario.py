@@ -20,6 +20,7 @@ from srunner.osc2.utils import tools
 
 # OSC2
 from srunner.osc2.symbol_manager.method_symbol import MethodSymbol
+from srunner.osc2.symbol_manager.judge_symbol import JudgeSymbol
 from srunner.osc2.symbol_manager.parameter_symbol import ParameterSymbol
 from srunner.osc2.utils.log_manager import (LOG_INFO, LOG_ERROR, LOG_WARNING)
 from srunner.osc2.utils.relational_operator import RelationalOperator
@@ -37,7 +38,7 @@ from srunner.osc2_stdlib.modifier import (
     SpeedModifier,
     LateralModifier, YawModifier, OrientationModifier, DistanceModifier,
     PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier,
-    SetBehaviorLogicModifier, KeepStateModifier
+    SetBehaviorLogicModifier, KeepStateModifier, AutoBindBehaviorModifier
 )
 
 # OSC2
@@ -228,8 +229,8 @@ def process_speed_modifier(
             model_config = modifier.get_hyperparameters()
             if agent_type == 'AI':
                 is_model[actor_name] = True
-                max_speed = model_config['max_speed']
-                max_acc = model_config['max_acc']
+                max_speed = model_config.get('max_speed', 10)
+                max_acc = model_config.get('max_acc', 5)
                 set_bm = IniBM(actor, bm_name, max_speed, max_acc)
                 father_tree.add_child(set_bm)
             elif agent_type == 'Script':
@@ -262,8 +263,9 @@ def process_speed_modifier(
                 npc_spawn = ActorTransformSetter(actor, start_wp.transform)
                 father_tree.add_child(npc_spawn)
                 if end_distance is not None:
+                    distance = end_distance - start_distance + ego_distance
                     if is_model[actor_name]:
-                        set_behavior_logic = SetBehaviorLogic(actor, start_position, end_distance, start_lane, end_lane)
+                        set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
                         father_tree.add_child(set_behavior_logic)
                     else:
                         # # Get the global route planner, used to calculate the route
@@ -273,7 +275,6 @@ def process_speed_modifier(
                         # distance = calculate_distance(
                         #     start_position, end_position, grp
                         # )
-                        distance = end_distance - start_distance + ego_distance
                         car_need_speed = distance / float(duration)
                         car_driving = FollowCar(actor, car_need_speed)
                         father_tree.add_child(car_driving)
@@ -333,7 +334,7 @@ def process_speed_modifier(
             if agent_type == 'AI':
                 max_speed = model_config.get('max_speed', 5)
                 max_acc = model_config.get('max_acc')
-                set_bm =  IniBM(actor, bm_name, max_speed, max_acc)
+                set_bm = IniBM(actor, bm_name, max_speed, max_acc)
             elif agent_type == 'Script':
                 pass
             father_tree.add_child(set_bm)
@@ -360,6 +361,75 @@ def process_speed_modifier(
             else:
                 follow_drive = WaypointFollower(actor, 15)
                 father_tree.add_child(follow_drive)
+
+        elif isinstance(modifier, AutoBindBehaviorModifier):
+            actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            behavior_type, model_name, hyperparameters = modifier.get_behavior_model()
+            if behavior_type == "AI":
+                is_model[actor_name] = True
+                max_speed = hyperparameters.get('max_speed', 10)
+                max_acc = hyperparameters.get('max_acc', 5)
+                set_bm = IniBM(actor, model_name, max_speed, max_acc)
+                father_tree.add_child(set_bm)
+            elif behavior_type == "Script":
+                bm_name = model_name
+                model_config = hyperparameters
+                if bm_name == "internal_npc":
+                    is_model[actor_name] = False
+                elif bm_name == "CARLA_Traffic_Manager":
+                    is_model[actor_name] = True
+                pass
+            logic = modifier.get_logic()
+            start_lane = logic['lane_start']
+            end_lane = logic['lane_end']
+            start_location = logic['position_start']
+            end_location = logic['position_end']
+            distance = end_location - start_location + ego_distance
+            ego_car_conf = config.get_car_config("ego_vehicle")
+            ego_car_location = ego_car_conf.get_transform().location
+            ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+            if start_location is not None:
+                if start_location < 0:
+                    wp_lists = ego_car_wp.previous(-start_location)
+                else:
+                    wp_lists = ego_car_wp.next(start_location)
+                start_wp = wp_lists[0]
+                start_position = start_wp.transform.location
+                npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+                father_tree.add_child(npc_spawn)
+                if end_location is not None:
+                    if is_model[actor_name]:
+                        set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane, False)
+                        father_tree.add_child(set_behavior_logic)
+                    else:
+                        # # Get the global route planner, used to calculate the route
+                        # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                        # grp = GlobalRoutePlanner(dao)
+                        # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                        # distance = calculate_distance(
+                        #     start_position, end_position, grp
+                        # )
+                        distance = end_location - start_location + ego_distance
+                        car_need_speed = distance / float(duration)
+                        car_driving = FollowCar(actor, car_need_speed)
+                        father_tree.add_child(car_driving)
+
+                        direction = tools.find_direction(start_lane, end_lane)
+                        if direction is not None:
+                            lane_change = LaneChange(
+                                actor,
+                                speed=car_need_speed,
+                                direction=direction,
+                                distance_same_lane=5,
+                                distance_other_lane=10,
+                            )
+                            father_tree.add_child(lane_change)
+
+                        continue_drive = WaypointFollower(actor, car_need_speed)
+                        father_tree.add_child(continue_drive)
+                else:
+                    raise RuntimeError("car can not get speed")
+
         else:
             LOG_WARNING("not implement modifier")
 
@@ -1344,6 +1414,20 @@ class OSC2Scenario(BasicScenario):
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
 
+                    elif modifier_name == "auto_bind_behavior":
+                        modifier_ins = AutoBindBehaviorModifier(actor, modifier_name)
+                        keyword_args = {}
+                        print(arguments)
+                        if isinstance(arguments, str):
+                            arguments = eval(arguments)
+                            keyword_args['behavior'] = arguments
+                        else:
+                            raise NotImplementedError(
+                                f"no implement argument of {modifier_name}"
+                            )
+                        modifier_ins.set_args(keyword_args)
+                        speed_modifiers.append(modifier_ins)
+
                     else:
                         raise NotImplementedError(
                             f"no implentment function: {modifier_name}"
@@ -1676,22 +1760,35 @@ class OSC2Scenario(BasicScenario):
                 )
 
         def visit_judge_exp(self, node: ast_node.judgeExp):
+            model = None
+            logic = None
+
             for child in node.get_children():
                 if isinstance(child, ast_node.judgeDeclaration):
-                    name, value = self.visit_judge_declaration(child)
-            return
+                    judge_name = child.judge_name
+                    method_scope = node.get_scope().resolve(judge_name)
+                    mode = method_scope.resolve(judge_name).value
+                    if child.value_exp.strip('"') == mode:
+                        model, logic = self.visit_judge_declaration(child)
+            judge_exp = [model, logic]
+            return str(judge_exp)
 
         def visit_judge_declaration(self, node: ast_node.judgeDeclaration):
-            arguments = self.visit_children(node)
-            print(arguments)
-            pass
+            model = None
+            logic = None
+            for child in node.get_children():
+                if isinstance(child, ast_node.logicDeclaration):
+                    field_name, arguments = self.visit_logic_declaration(child)
+                    if field_name == "model":
+                        model = OSC2Helper.flat_list(arguments)
+                    elif field_name == "logic":
+                        logic_params = arguments[1]
+                        logic = OSC2Helper.flat_list(logic_params)
+            return model, logic
 
         def visit_logic_declaration(self, node: ast_node.logicDeclaration):
             field_name = node.field_name
             arguments = self.visit_children(node)
-
-            # argument 待处理
-
             return field_name, arguments
 
         def visit_method_declaration(self, node: ast_node.MethodDeclaration):
@@ -1880,7 +1977,7 @@ class OSC2Scenario(BasicScenario):
         behavior_tree = behavior_builder.get_behavior_tree()
         self.set_behavior_tree(behavior_tree)
 
-        py_trees.display.render_dot_tree(behavior_tree)
+        # py_trees.display.render_dot_tree(behavior_tree)
 
         return self.behavior
 

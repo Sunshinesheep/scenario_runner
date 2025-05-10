@@ -935,6 +935,33 @@ class OpenSCENARIO2Listener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def enterJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def exitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def enterJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def exitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def enterLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def exitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        pass
+
+
     # Enter a parse tree produced by OpenSCENARIO2Parser#methodQualifier.
     def enterMethodQualifier(self, ctx:OpenSCENARIO2Parser.MethodQualifierContext):
         pass
@@ -1049,33 +1076,6 @@ class OpenSCENARIO2Listener(ParseTreeListener):
 
     # Exit a parse tree produced by OpenSCENARIO2Parser#expression.
     def exitExpression(self, ctx:OpenSCENARIO2Parser.ExpressionContext):
-        pass
-
-
-    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeExp.
-    def enterJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
-        pass
-
-    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
-    def exitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
-        pass
-
-
-    # Enter a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
-    def enterJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
-        pass
-
-    # Exit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
-    def exitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
-        pass
-
-
-    # Enter a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
-    def enterLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
-        pass
-
-    # Exit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
-    def exitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
         pass
 
 

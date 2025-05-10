@@ -141,7 +141,7 @@ def LOG_ERROR(msg, token=None, line=None, column=None):
         )
     elif line is not None and column is not None:
         file_path, line = import_msg.get_msg(line)
-        run_log_msg = "[Error]" + " line " + str(line) + ":" + str(column) + ", " + msg
+        run_log_msg = "[Error]" + " line " + str(line) + ":" + str(column) + ", " + (msg or "")
         msg = (
             '[Error] file "'
             + file_path
@@ -150,7 +150,7 @@ def LOG_ERROR(msg, token=None, line=None, column=None):
             + ":"
             + str(column)
             + ", "
-            + msg
+            + (msg or "")
         )
     # If you run run_symbol_testcases.py, no error is reported
     if log_msg and log_msg.is_open:

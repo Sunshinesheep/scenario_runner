@@ -524,6 +524,21 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
+    def visitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
+    def visitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
+    def visitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by OpenSCENARIO2Parser#methodQualifier.
     def visitMethodQualifier(self, ctx:OpenSCENARIO2Parser.MethodQualifierContext):
         return self.visitChildren(ctx)
@@ -586,21 +601,6 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by OpenSCENARIO2Parser#expression.
     def visitExpression(self, ctx:OpenSCENARIO2Parser.ExpressionContext):
-        return self.visitChildren(ctx)
-
-
-    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeExp.
-    def visitJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
-        return self.visitChildren(ctx)
-
-
-    # Visit a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
-    def visitJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
-        return self.visitChildren(ctx)
-
-
-    # Visit a parse tree produced by OpenSCENARIO2Parser#logicDeclaration.
-    def visitLogicDeclaration(self, ctx:OpenSCENARIO2Parser.LogicDeclarationContext):
         return self.visitChildren(ctx)
 
 

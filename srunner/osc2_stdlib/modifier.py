@@ -506,3 +506,49 @@ class KeepStateModifier(Modifier):
                 elif "global_end" in value:
                     result[key+'_end'] = value_fin
         return result
+
+class AutoBindBehaviorModifier(Modifier):
+    def __init__(self, actor_name, name):
+        super().__init__(actor_name, name)
+
+    def get_behavior_model(self):
+        behavior = self.args['behavior']
+        model = behavior[0]
+        config = {}
+        hyperparameters = {}
+        for model_config in model:
+             config[model_config[0]] = model_config[1]
+        model_name = config['model_name']
+        behavior_type = config['behavior_type']
+        hyper = config['hyperparameters']
+        if isinstance(hyper, tuple):
+            hyperparameters[hyper[0]] = hyper[1]
+        elif isinstance(hyper, list):
+            for h in hyper:
+                hyperparameters[h[0]] = h[1]
+        return behavior_type, model_name, hyperparameters
+
+    def get_logic(self):
+        value_fin = 0
+        behavior = self.args['behavior']
+        logic = behavior[1]
+        config = {}
+        for l in logic:
+            temp = l[1].split(',')[0]
+            if temp.endswith('m') and temp[:-1].strip().isdigit():
+                value_fin = int(temp[:-1].strip())
+            elif temp.strip().isdigit():
+                value_fin = int(temp)
+
+            if "behind" in l[1]:
+                t = -value_fin
+            elif "ahead_of" in l[1]:
+                t = value_fin
+            else:
+                t = value_fin
+
+            if "start" in l[1]:
+                config[l[0] + '_start'] = t
+            elif "end" in l[1]:
+                config[l[0] + '_end'] = t
+        return config

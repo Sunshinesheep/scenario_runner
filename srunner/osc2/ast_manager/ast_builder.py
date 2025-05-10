@@ -992,7 +992,7 @@ class ASTBuilder(OpenSCENARIO2Listener):
     # Enter a parse tree produced by OpenSCENARIO2Parser#judgeDeclaration.
     def enterJudgeDeclaration(self, ctx:OpenSCENARIO2Parser.JudgeDeclarationContext):
         self.__node_stack.append(self.__cur_node)
-        judge_name = None
+        judge_name = ctx.judgeName().getText()
         value_exp = ctx.expression().getText()
 
         judge = JudgeSymbol(judge_name, value_exp, self.__current_scope)
@@ -1897,6 +1897,8 @@ class ASTBuilder(OpenSCENARIO2Listener):
             _type = "expression"
         elif ctx.structuredIdentifier():
             _type = "external"
+        elif ctx.judgeExp():
+            _type = "judge"
         else:
             _type = "undefined"
 

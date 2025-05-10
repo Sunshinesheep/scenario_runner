@@ -379,7 +379,7 @@ fieldDeclaration
 
 //parameter-declaration ::= field-name (',' field-name)* ':' type-declarator ['=' default-value] [parameter-with-declaration] NEWLINE
 //[improvement:] parameterWithDeclaration? NEWLINE -> (parameterWithDeclaration | NEWLINE)
-parameterDeclaration 
+parameterDeclaration
 	: fieldName (',' fieldName)* ':' typeDeclarator ('=' defaultValue)? (parameterWithDeclaration | NEWLINE);
 
 variableDeclaration 
@@ -431,7 +431,8 @@ doMember
 	| behaviorInvocation 
 	| waitDirective 
 	| emitDirective 
-	| callDirective);
+	| callDirective
+	| chooseDirective);
 
 // composition
 composition : compositionOperator (OPEN_PAREN argumentList? CLOSE_PAREN)?':' NEWLINE INDENT
@@ -464,6 +465,8 @@ callDirective : 'call'  methodInvocation NEWLINE;
 
 untilDirective : 'until' eventSpecification NEWLINE;
 
+chooseDirective : 'choose' stateDeclaration (',' stateDeclaration)? NEWLINE;
+
 methodInvocation : postfixExp OPEN_PAREN (argumentList)? CLOSE_PAREN;
 
 methodDeclaration : 'def' methodName OPEN_PAREN (argumentListSpecification)? CLOSE_PAREN ('->' returnType)? methodImplementation NEWLINE;
@@ -471,9 +474,22 @@ methodDeclaration : 'def' methodName OPEN_PAREN (argumentListSpecification)? CLO
 returnType : typeDeclarator;
 
 methodImplementation 
-	: 'is' (methodQualifier)? ('expression' expression 
+	: 'is' (methodQualifier)? ('expression' expression
+	| NEWLINE judgeExp
 	| 'undefined'
 	| 'external' structuredIdentifier OPEN_PAREN (argumentList)? CLOSE_PAREN);
+
+
+judgeExp : judgeDeclaration+ ;
+
+judgeDeclaration : ('if'|'elif') judgeName '==' expression ':' NEWLINE INDENT
+    logicDeclaration+ DEDENT;
+
+logicDeclaration
+    : fieldName '=' OPEN_BRACE
+        argumentList NEWLINE CLOSE_BRACE;
+
+stateDeclaration : OPEN_BRACE logicDeclaration+ OPEN_BRACE;
 
 methodQualifier : 'only';
 
@@ -499,17 +515,7 @@ targetName : Identifier ;
 expression 
 	: implication
 	| dictLiteral
-	| judgeExp
 	| ternaryOpExp;
-
-judgeExp : judgeDeclaration+ ;
-
-judgeDeclaration : ('if'|'elif') judgeName '==' expression ':' NEWLINE INDENT
-    logicDeclaration+ NEWLINE DEDENT;
-
-logicDeclaration
-    : fieldName '=' '{' NEWLINE INDENT
-        argumentList NEWLINE DEDENT '}';
 
 ternaryOpExp 
 	: implication '?' expression ':' expression;
@@ -575,8 +581,7 @@ valueExp
 	| listConstructor
 	| rangeConstructor;
 
-dictLiteral : '{' NEWLINE INDENT argumentList NEWLINE DEDENT '}'
-    ;
+dictLiteral : OPEN_BRACE argumentList CLOSE_BRACE;
 
 //stateExp
 //    : StateLiteral;
@@ -598,7 +603,7 @@ judgeName : Identifier ;
 
 argumentList 
 	: positionalArgument (',' positionalArgument)* (',' namedArgument)*
-	| namedArgument (','NEWLINE namedArgument)*;
+	| namedArgument (','namedArgument)*;
 
 positionalArgument : expression;
 namedArgument : argumentName ':' expression;
@@ -655,6 +660,8 @@ OPEN_BRACK : '[' {self.opened += 1}  ;
 CLOSE_BRACK : ']' {self.opened -= 1}  ;
 OPEN_PAREN : '(' {self.opened += 1}  ;
 CLOSE_PAREN : ')' {self.opened -= 1}  ;
+OPEN_BRACE : '{' {self.opened += 1}  ;
+CLOSE_BRACE : '}' {self.opened -= 1}  ;
 
 SKIP_
  : (SPACES | LINE_JOINING)
