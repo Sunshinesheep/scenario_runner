@@ -431,8 +431,7 @@ doMember
 	| behaviorInvocation 
 	| waitDirective 
 	| emitDirective 
-	| callDirective
-	| chooseDirective);
+	| callDirective);
 
 // composition
 composition : compositionOperator (OPEN_PAREN argumentList? CLOSE_PAREN)?':' NEWLINE INDENT
@@ -465,8 +464,6 @@ callDirective : 'call'  methodInvocation NEWLINE;
 
 untilDirective : 'until' eventSpecification NEWLINE;
 
-chooseDirective : 'choose' stateDeclaration (',' stateDeclaration)? NEWLINE;
-
 methodInvocation : postfixExp OPEN_PAREN (argumentList)? CLOSE_PAREN;
 
 methodDeclaration : 'def' methodName OPEN_PAREN (argumentListSpecification)? CLOSE_PAREN ('->' returnType)? methodImplementation NEWLINE;
@@ -483,11 +480,14 @@ methodImplementation
 judgeExp : judgeDeclaration+ ;
 
 judgeDeclaration : ('if'|'elif') judgeName '==' expression ':' NEWLINE INDENT
-    logicDeclaration+ DEDENT;
+    (logicDeclaration+ | chooseDirective) DEDENT;
 
 logicDeclaration
     : fieldName '=' OPEN_BRACE
         argumentList NEWLINE CLOSE_BRACE;
+
+chooseDirective : 'choose' ':' NEWLINE INDENT
+    stateDeclaration (',' NEWLINE stateDeclaration)? DEDENT;
 
 stateDeclaration : OPEN_BRACE logicDeclaration+ OPEN_BRACE;
 

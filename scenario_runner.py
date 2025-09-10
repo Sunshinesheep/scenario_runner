@@ -43,6 +43,8 @@ from srunner.tools.osc2_helper import OSC2Helper
 from srunner.scenarios.osc2_scenario import OSC2Scenario
 from srunner.scenarioconfigs.osc2_scenario_configuration import OSC2ScenarioConfiguration
 
+from data_bridge import DataBridge
+
 # Version of scenario_runner
 VERSION = '0.9.13'
 
@@ -398,6 +400,8 @@ class ScenarioRunner(object):
                                         ego_vehicles=self.ego_vehicles,
                                         config=config,
                                         osc2_file=self._args.openscenario2,
+                                        ga_mode=self._args.GA,
+                                        mutation_json=self._args.config_json,
                                         timeout=100000)
             else:
                 scenario_class = self._get_scenario_class_or_fail(config.type)
@@ -420,8 +424,20 @@ class ScenarioRunner(object):
                 self.client.start_recorder(recorder_name, True)
 
             # Load scenario and run it
+            self.manager.data_bridge = DataBridge(self.world)
             self.manager.load_scenario(scenario, self.agent_instance)
             self.manager.run_scenario()
+
+            scenario_path = "/home/lhy/projects/scenario_runner/trace/"
+            scenario_filename = None
+            if not self._args.openscenario2 is None:
+                _, scenario_filename = os.path.split(self._args.openscenario2)
+            # Others
+            elif not self._args.scenario is None:
+                scenario_filename = self._args.scenario
+
+            if scenario_filename:
+                self.manager.data_bridge.end_trace(scenario_path, scenario_filename)
 
             # Provide outputs if required
             self._analyze_scenario(config)
@@ -570,6 +586,8 @@ def main():
     parser.add_argument('--sync', action='store_true',
                         help='Forces the simulation to run synchronously')
     parser.add_argument('--list', action="store_true", help='List all supported scenarios and exit')
+    parser.add_argument('--GA', help='Use to Fuzz')
+    parser.add_argument('--config_json', help="For mutation")
 
     parser.add_argument(
         '--scenario', help='Name of the scenario to be executed. Use the preposition \'group:\' to run all scenarios of one class, e.g. ControlLoss or FollowLeadingVehicle')

@@ -962,6 +962,24 @@ class OpenSCENARIO2Listener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by OpenSCENARIO2Parser#chooseDirective.
+    def enterChooseDirective(self, ctx:OpenSCENARIO2Parser.ChooseDirectiveContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#chooseDirective.
+    def exitChooseDirective(self, ctx:OpenSCENARIO2Parser.ChooseDirectiveContext):
+        pass
+
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def enterStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        pass
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def exitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        pass
+
+
     # Enter a parse tree produced by OpenSCENARIO2Parser#methodQualifier.
     def enterMethodQualifier(self, ctx:OpenSCENARIO2Parser.MethodQualifierContext):
         pass

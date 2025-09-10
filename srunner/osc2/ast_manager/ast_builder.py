@@ -975,6 +975,34 @@ class ASTBuilder(OpenSCENARIO2Listener):
         self.__cur_node = self.__node_stack.pop()
         self.__current_scope = self.__current_scope.get_enclosing_scope()
 
+    # Enter a parse tree produced by OpenSCENARIO2Parser#chooseDirective.
+    def enterChooseDirective(self, ctx:OpenSCENARIO2Parser.ChooseDirectiveContext):
+        self.__node_stack.append(self.__cur_node)
+        node = ast_node.chooseDirective()
+        node.set_loc(ctx.start.line, ctx.start.column)
+        node.set_scope(self.__current_scope)
+
+        self.__cur_node.set_children(node)
+        self.__cur_node = node
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#chooseDirective.
+    def exitChooseDirective(self, ctx:OpenSCENARIO2Parser.ChooseDirectiveContext):
+        self.__cur_node = self.__node_stack.pop()
+
+    # Enter a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def enterStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        self.__node_stack.append(self.__cur_node)
+        node = ast_node.stateDeclaration()
+        node.set_loc(ctx.start.line, ctx.start.column)
+        node.set_scope(self.__current_scope)
+
+        self.__cur_node.set_children(node)
+        self.__cur_node = node
+
+    # Exit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def exitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        self.__cur_node = self.__node_stack.pop()
+
     # Enter a parse tree produced by OpenSCENARIO2Parser#judgeExp.
     def enterJudgeExp(self, ctx:OpenSCENARIO2Parser.JudgeExpContext):
         self.__node_stack.append(self.__cur_node)

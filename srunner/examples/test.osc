@@ -1,0 +1,21 @@
+struct behavior_model_config:
+    model_name: string
+    enum behavior_type:[Script, AI, Hybrid]
+    hyperparameters: dict
+
+struct behavior_logic_config:
+    logic_params: dict
+
+struct behavior_profile:
+    model: behavior_model_config
+    logic: behavior_logic_config
+
+struct adapt_npc_bm:
+    def adapt(scenario_mode: string) -> is expression \
+if scenario_mode == "natural":{
+    mode
+}
+
+elif scenario_mode == "diverse":{
+    model
+}

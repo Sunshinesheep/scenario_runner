@@ -13,6 +13,7 @@ It must not be modified and is for reference only!
 from __future__ import print_function
 import sys
 import time
+from carla import Transform, Location, Rotation, TrafficLightState
 
 import py_trees
 
@@ -65,6 +66,9 @@ class ScenarioManager(object):
         self.start_system_time = None
         self.end_system_time = None
 
+        self.data_bridge = None
+        self.able_data = None
+
     def _reset(self):
         """
         Reset all parameters
@@ -108,12 +112,48 @@ class ScenarioManager(object):
         self.scenario_tree = self.scenario.scenario_tree
         self.ego_vehicles = scenario.ego_vehicles
         self.other_actors = scenario.other_actors
+        self.data_bridge.set_actors(self.ego_vehicles[0], self.other_actors)
 
         # To print the scenario tree uncomment the next line
         # py_trees.display.render_dot_tree(self.scenario_tree)
 
         if self._agent is not None:
             self._agent.setup_sensors(self.ego_vehicles[0], self._debug_mode)
+
+    def set_camera(self):
+        world = CarlaDataProvider.get_world()
+        if world:
+            spectator = world.get_spectator()
+        if len(self.other_actors) > 0:
+            ACTOR_ID = 0
+            CAMERA_DIST = 40
+            if ACTOR_ID == 0:
+                npc_location = self.ego_vehicles[0].get_transform().location
+                npc_rotation = self.ego_vehicles[0].get_transform().rotation
+            else:
+                npc_location = self.other_actors[ACTOR_ID-1].get_transform().location
+                npc_rotation = self.other_actors[ACTOR_ID-1].get_transform().rotation
+            if spectator and npc_location and npc_rotation:
+                npc_forward_vector = npc_rotation.get_forward_vector() * CAMERA_DIST
+                npc_up_vector = npc_rotation.get_up_vector() * CAMERA_DIST
+                spectator.set_transform(Transform(npc_location - npc_forward_vector + npc_up_vector, Rotation(pitch=-45, yaw=npc_rotation.yaw)))
+
+    def ego_arrived(self, arrive_distance = 8.0):
+        world = CarlaDataProvider.get_world()
+        ego_location = self.ego_vehicles[0].get_location()
+        if self.able_data:
+            lane_position_destination = self.able_data["ego"]["destination"]['lane_position']
+            dest_location = world.get_map().get_waypoint_xodr(
+                int(lane_position_destination['lane'].replace("lane_", "")),
+                lane_position_destination['roadID'],
+                lane_position_destination['offset']
+            ).transform.location
+        elif self._agent:
+            dest_location = self._agent._agent.destination
+        else:
+            return False
+        distance = dest_location.distance(ego_location)
+        return distance <= arrive_distance
 
     def run_scenario(self):
         """
@@ -127,6 +167,9 @@ class ScenarioManager(object):
         self._watchdog.start()
         self._running = True
 
+        tick_counter = 0
+        start_tick_threshold = 10
+
         while self._running:
             timestamp = None
             world = CarlaDataProvider.get_world()
@@ -136,6 +179,20 @@ class ScenarioManager(object):
                     timestamp = snapshot.timestamp
             if timestamp:
                 self._tick_scenario(timestamp)
+                if tick_counter == start_tick_threshold:
+                    self.data_bridge.update_ego_vehicle_start()
+                    self.data_bridge.update_npc_vehicle_start()
+                    # self.send_routing_request_apollo()
+                    self.set_camera()
+                elif tick_counter > start_tick_threshold:
+                    self.data_bridge.update_trace()
+                    self.data_bridge.update_npc_vehicle_motion()
+                    self.set_camera()
+                # End the scenario once the ego vehicle has arrived
+                if self.ego_arrived():
+                    self.stop_scenario()
+
+                tick_counter += 1
 
         self.cleanup()
 

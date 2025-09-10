@@ -1,8 +1,10 @@
 from __future__ import print_function
 
 import copy
+import json
 import math
 import operator
+import os
 import random
 import re
 import sys
@@ -10,7 +12,11 @@ from dataclasses import field
 from typing import List, Tuple
 
 import py_trees
+from torchgen.api.functionalization import mutated_view_binding
 from torchgen.api.native import arguments
+from wandb.cli import agent
+
+from scenario_config_record import ScenarioConfigRecord
 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
@@ -38,7 +44,7 @@ from srunner.osc2_stdlib.modifier import (
     SpeedModifier,
     LateralModifier, YawModifier, OrientationModifier, DistanceModifier,
     PhysicalMovementModifier, AvoidCollisionsModifier, SetBMModifier,
-    SetBehaviorLogicModifier, KeepStateModifier, AutoBindBehaviorModifier
+    SetBehaviorLogicModifier, KeepStateModifier, AutoOrchestratesBehaviorModifier
 )
 
 # OSC2
@@ -141,7 +147,282 @@ def para_type_str_sequence(config, arguments, line, column, node):
         pass
     return retrieval_name
 
-ego_distance = 100
+ego_speed = 30
+ego_total_distance = 0
+ego_lane = 2
+car_info = {}
+
+# def read_new_para():
+#     input_folder = "/home/lhy/projects/scenario_runner/config"
+#     files = os.listdir(input_folder)
+#     length = len(files)
+#     file = "/home/lhy/projects/scenario_runner/config/" + str(length - 1) + ".json"
+#     with open(file) as f:
+#         para_data = json.load(f)
+#     return para_data
+
+def process_speed_modifier_with_para(
+        config, modifiers, duration: float, all_duration: float, father_tree, config_json
+):
+    if not modifiers:
+        return
+
+    global ego_speed
+    global ego_total_distance
+    global ego_lane
+    global car_info
+
+    is_model = {}
+    para_data = config_json
+
+    for modifier in modifiers:
+        actor_name = modifier.get_actor_name()
+
+        if isinstance(modifier, SetBMModifier):
+            actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            agent_type = para_data[actor_name]['behavior_type']
+            bm_name = para_data[actor_name]['model_name']
+            model_config = para_data[actor_name]['hyperparameters']
+            if agent_type == 'AI':
+                is_model[actor_name] = True
+                max_speed = model_config.get('max_speed', 10)
+                max_acc = model_config.get('max_acc', 5)
+                set_bm = IniBM(actor, bm_name, max_speed, max_acc)
+                father_tree.add_child(set_bm)
+            elif agent_type == 'Script':
+                bm_name = modifier.get_bm_name()
+                if bm_name == "internal_npc":
+                    is_model[actor_name] = False
+                elif bm_name == "CARLA_Traffic_Manager":
+                    is_model[actor_name] = True
+                    pass
+                elif bm_name == "behavior_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
+                elif bm_name == "adversarial_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
+
+        elif isinstance(modifier, SetBehaviorLogicModifier):
+            actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            start_lane = para_data[actor_name]['start_position']['lane_id']
+            end_lane = para_data[actor_name]['end_position']['lane_id']
+            lane_change = None
+            speed_value = None
+            ego_distance = ego_speed * duration
+            if actor_name != "ego_vehicle":
+                start_distance = para_data[actor_name]['start_position']['position']
+                end_distance = para_data[actor_name]['end_position']['position']
+                ego_car_conf = config.get_car_config("ego_vehicle")
+                ego_car_location = ego_car_conf.get_transform().location
+                ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+                if ego_total_distance > 0:
+                    ego_car_wp = ego_car_wp.next(ego_total_distance)[0]
+                if start_distance is not None:
+                    if start_distance < 0:
+                        wp_lists = ego_car_wp.previous(-start_distance)
+                    else:
+                        wp_lists = ego_car_wp.next(start_distance)
+                    start_wp = wp_lists[0]
+                    if start_lane < ego_lane:
+                        start_wp = start_wp.get_left_lane()
+                    elif start_lane > ego_lane:
+                        start_wp = start_wp.get_right_lane()
+                    start_position = start_wp.transform.location
+                    if ego_total_distance == 0:
+                        npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+                        father_tree.add_child(npc_spawn)
+                    if end_distance is not None:
+                        distance = end_distance - start_distance + ego_distance
+                        if is_model[actor_name]:
+                            set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
+                            father_tree.add_child(set_behavior_logic)
+                        else:
+                            # # Get the global route planner, used to calculate the route
+                            # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                            # grp = GlobalRoutePlanner(dao)
+                            # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                            # distance = calculate_distance(
+                            #     start_position, end_position, grp
+                            # )
+                            car_need_speed = distance / float(duration)
+                            car_driving = FollowCar(actor, car_need_speed)
+                            father_tree.add_child(car_driving)
+
+                            direction = tools.find_direction(start_lane, end_lane)
+                            if direction is not None:
+                                lane_change = LaneChange(
+                                    actor,
+                                    speed=car_need_speed,
+                                    direction=direction,
+                                    distance_same_lane=5,
+                                    distance_other_lane=10,
+                                )
+                                father_tree.add_child(lane_change)
+
+                            continue_drive = WaypointFollower(actor, car_need_speed)
+                            father_tree.add_child(continue_drive)
+                    elif speed_value is not None:
+                        start_drive = WaypointFollower(actor, speed_value)
+                        father_tree.add_child(start_drive)
+                    else:
+                        raise RuntimeError("car can not get speed")
+                elif speed_value is not None:
+                    if lane_change is not None:
+                        if lane_change < 0:
+                            change_direction = "left"
+                        else:
+                            change_direction = "right"
+                        lane_num = abs(lane_change)
+                        change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                        father_tree.add_child(change_lane)
+                    continue_drive = WaypointFollower(actor, speed_value)
+                    father_tree.add_child(continue_drive)
+                elif lane_change is not None:
+                    if lane_change < 0:
+                        change_direction = "left"
+                    else:
+                        change_direction = "right"
+                    lane_num = abs(lane_change)
+                    change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                    continue_drive = WaypointFollower(actor)
+                    father_tree.add_child(change_lane)
+                    father_tree.add_child(continue_drive)
+                else:
+                    raise RuntimeError("nothing to set the car")
+                ego_total_distance += ego_speed * duration
+            else:
+                distance = para_data[actor_name]['distance_to_go']
+                ego_lane = start_lane
+                wp = CarlaDataProvider.get_waypoint_by_laneid(start_lane)
+                start_position = wp.transform.location
+                if wp:
+                    actor_visible = ActorTransformSetter(actor, wp.transform)
+                    car_config = config.get_car_config(actor_name)
+                    car_config.set_arg({"init_transform": wp.transform})
+                    father_tree.add_child(actor_visible)
+                else:
+                    raise RuntimeError(f"no valid position to spawn {actor_name} car")
+                if is_model[actor_name]:
+                    set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
+                    father_tree.add_child(set_behavior_logic)
+                else:
+                    # # Get the global route planner, used to calculate the route
+                    # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                    # grp = GlobalRoutePlanner(dao)
+                    # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                    # distance = calculate_distance(
+                    #     start_position, end_position, grp
+                    # )
+                    car_need_speed = distance / 40
+                    ego_speed = car_need_speed
+                    # car_driving = FollowCar(actor, car_need_speed)
+                    # father_tree.add_child(car_driving)
+
+                    direction = tools.find_direction(start_lane, end_lane)
+                    if direction is not None:
+                        lane_change = LaneChange(
+                            actor,
+                            speed=car_need_speed,
+                            direction=direction,
+                            distance_same_lane=5,
+                            distance_other_lane=10,
+                        )
+                        father_tree.add_child(lane_change)
+
+                    continue_drive = WaypointFollower(actor, car_need_speed)
+                    father_tree.add_child(continue_drive)
+
+        elif isinstance(modifier, AutoOrchestratesBehaviorModifier):
+            actor = CarlaDataProvider.get_actor_by_name(actor_name)
+            behavior_type = para_data[actor_name]['behavior_type']
+            model_name = para_data[actor_name]['model_name']
+            hyperparameters = para_data[actor_name]['hyperparameters']
+            ego_distance = ego_speed * duration
+            if behavior_type == "AI":
+                is_model[actor_name] = True
+                max_speed = hyperparameters.get('max_speed', 10)
+                max_acc = hyperparameters.get('max_acc', 5)
+                set_bm = IniBM(actor, model_name, max_speed, max_acc)
+                father_tree.add_child(set_bm)
+            elif behavior_type == "Script":
+                bm_name = model_name
+                model_config = hyperparameters
+                if bm_name == "internal_npc":
+                    is_model[actor_name] = False
+                elif bm_name == "CARLA_Traffic_Manager":
+                    is_model[actor_name] = True
+                elif bm_name == "behavior_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
+                pass
+            start_lane = para_data[actor_name]['start_position']['lane_id']
+            end_lane = para_data[actor_name]['end_position']['lane_id']
+            start_location = para_data[actor_name]['start_position']['position']
+            end_location = para_data[actor_name]['end_position']['position']
+
+            distance = end_location - start_location + ego_distance
+            ego_car_conf = config.get_car_config("ego_vehicle")
+            ego_car_location = ego_car_conf.get_transform().location
+            ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+
+            if start_location is not None:
+                if start_location < 0:
+                    wp_lists = ego_car_wp.previous(-start_location)
+                else:
+                    wp_lists = ego_car_wp.next(start_location)
+                start_wp = wp_lists[0]
+                start_position = start_wp.transform.location
+                npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+                father_tree.add_child(npc_spawn)
+                if end_location is not None:
+                    if is_model[actor_name]:
+                        set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane, False)
+                        father_tree.add_child(set_behavior_logic)
+                    else:
+                        # # Get the global route planner, used to calculate the route
+                        # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                        # grp = GlobalRoutePlanner(dao)
+                        # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                        # distance = calculate_distance(
+                        #     start_position, end_position, grp
+                        # )
+                        distance = end_location - start_location + ego_distance
+                        car_need_speed = distance / float(duration)
+                        car_driving = FollowCar(actor, car_need_speed)
+                        father_tree.add_child(car_driving)
+
+                        direction = tools.find_direction(start_lane, end_lane)
+                        if direction is not None:
+                            lane_change = LaneChange(
+                                actor,
+                                speed=car_need_speed,
+                                direction=direction,
+                                distance_same_lane=5,
+                                distance_other_lane=10,
+                            )
+                            father_tree.add_child(lane_change)
+                        else:
+                            pass
+                        continue_drive = WaypointFollower(actor, car_need_speed, avoid_collision=True)
+                        father_tree.add_child(continue_drive)
+                else:
+                    raise RuntimeError("car can not get speed")
+
+        else:
+            print("What can I say")
+
+def record_info(car_info):
+    scenario_config = ScenarioConfigRecord()
+    for name in car_info:
+        if name == "ego_vehicle":
+            scenario_config.ego_info_w(car_info[name])
+        else:
+            scenario_config.npc_info_w(car_info[name])
+    scenario_config.write_to_json()
 
 def process_speed_modifier(
     config, modifiers, duration: float, all_duration: float, father_tree
@@ -149,7 +430,11 @@ def process_speed_modifier(
     if not modifiers:
         return
 
-    global ego_distance
+    global ego_speed
+    global ego_total_distance
+    global ego_lane
+    global car_info
+
     is_model = {}
 
     for modifier in modifiers:
@@ -227,6 +512,12 @@ def process_speed_modifier(
             agent_type = modifier.get_type()
             bm_name = modifier.get_bm_name()
             model_config = modifier.get_hyperparameters()
+            car_info[actor_name] = {
+                "behavior_type": agent_type,
+                "model_name": bm_name,
+                "max_speed": model_config.get('max_speed', 10),
+                "max_acc": model_config.get('max_acc', 5)
+            }
             if agent_type == 'AI':
                 is_model[actor_name] = True
                 max_speed = model_config.get('max_speed', 10)
@@ -241,6 +532,14 @@ def process_speed_modifier(
                 elif bm_name == "CARLA_Traffic_Manager":
                     is_model[actor_name] = True
                     pass
+                elif bm_name == "behavior_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
+                elif bm_name == "adversarial_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
 
         elif isinstance(modifier, SetBehaviorLogicModifier):
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
@@ -250,79 +549,136 @@ def process_speed_modifier(
             end_distance = modifier.get_end_distance()
             lane_change = modifier.get_lane_change()
             speed_value = modifier.get_speed()
-            ego_car_conf = config.get_car_config("ego_vehicle")
-            ego_car_location = ego_car_conf.get_transform().location
-            ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
-            if start_distance is not None:
-                if start_distance < 0:
-                    wp_lists = ego_car_wp.previous(-start_distance)
-                else:
-                    wp_lists = ego_car_wp.next(start_distance)
-                start_wp = wp_lists[0]
-                start_position = start_wp.transform.location
-                npc_spawn = ActorTransformSetter(actor, start_wp.transform)
-                father_tree.add_child(npc_spawn)
-                if end_distance is not None:
-                    distance = end_distance - start_distance + ego_distance
-                    if is_model[actor_name]:
-                        set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
-                        father_tree.add_child(set_behavior_logic)
+            ego_distance = ego_speed * duration
+            if actor_name != "ego_vehicle":
+                car_info[actor_name]["name"] = actor.type_id
+                car_info[actor_name]["start_lane_id"] = start_lane
+                car_info[actor_name]["end_lane_id"] = end_lane
+                car_info[actor_name]["start_position"] = start_distance
+                car_info[actor_name]["end_position"] = end_distance
+                ego_car_conf = config.get_car_config("ego_vehicle")
+                ego_car_location = ego_car_conf.get_transform().location
+                ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+                if ego_total_distance > 0:
+                    ego_car_wp = ego_car_wp.next(ego_total_distance)[0]
+                if start_distance is not None:
+                    if start_distance < 0:
+                        wp_lists = ego_car_wp.previous(-start_distance)
                     else:
-                        # # Get the global route planner, used to calculate the route
-                        # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
-                        # grp = GlobalRoutePlanner(dao)
-                        # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
-                        # distance = calculate_distance(
-                        #     start_position, end_position, grp
-                        # )
-                        car_need_speed = distance / float(duration)
-                        car_driving = FollowCar(actor, car_need_speed)
-                        father_tree.add_child(car_driving)
+                        wp_lists = ego_car_wp.next(start_distance)
+                    start_wp = wp_lists[0]
+                    if start_lane < ego_lane:
+                        start_wp = start_wp.get_left_lane()
+                    elif start_lane > ego_lane:
+                        start_wp = start_wp.get_right_lane()
+                    start_position = start_wp.transform.location
+                    if ego_total_distance == 0:
+                        npc_spawn = ActorTransformSetter(actor, start_wp.transform)
+                        father_tree.add_child(npc_spawn)
+                    if end_distance is not None:
+                        distance = end_distance - start_distance + ego_distance
+                        if is_model[actor_name]:
+                            set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
+                            father_tree.add_child(set_behavior_logic)
+                        else:
+                            # # Get the global route planner, used to calculate the route
+                            # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                            # grp = GlobalRoutePlanner(dao)
+                            # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                            # distance = calculate_distance(
+                            #     start_position, end_position, grp
+                            # )
+                            car_need_speed = distance / float(duration)
+                            car_driving = FollowCar(actor, car_need_speed)
+                            father_tree.add_child(car_driving)
 
-                        direction = tools.find_direction(start_lane, end_lane)
-                        if direction is not None:
-                            lane_change = LaneChange(
-                                actor,
-                                speed=car_need_speed,
-                                direction=direction,
-                                distance_same_lane=5,
-                                distance_other_lane=10,
-                            )
-                            father_tree.add_child(lane_change)
+                            direction = tools.find_direction(start_lane, end_lane)
+                            if direction is not None:
+                                lane_change = LaneChange(
+                                    actor,
+                                    speed=car_need_speed,
+                                    direction=direction,
+                                    distance_same_lane=5,
+                                    distance_other_lane=10,
+                                )
+                                father_tree.add_child(lane_change)
 
-                        continue_drive = WaypointFollower(actor, car_need_speed)
-                        father_tree.add_child(continue_drive)
+                            continue_drive = WaypointFollower(actor, car_need_speed)
+                            father_tree.add_child(continue_drive)
+                    elif speed_value is not None:
+                        start_drive = WaypointFollower(actor, speed_value)
+                        father_tree.add_child(start_drive)
+                    else:
+                        raise RuntimeError("car can not get speed")
                 elif speed_value is not None:
-                    start_drive = WaypointFollower(actor, speed_value)
-                    father_tree.add_child(start_drive)
-                else:
-                    raise RuntimeError("car can not get speed")
-            elif speed_value is not None:
-                if lane_change is not None:
+                    if lane_change is not None:
+                        if lane_change < 0:
+                            change_direction = "left"
+                        else:
+                            change_direction = "right"
+                        lane_num = abs(lane_change)
+                        change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                        father_tree.add_child(change_lane)
+                    continue_drive = WaypointFollower(actor, speed_value)
+                    father_tree.add_child(continue_drive)
+                elif lane_change is not None:
                     if lane_change < 0:
                         change_direction = "left"
                     else:
                         change_direction = "right"
                     lane_num = abs(lane_change)
                     change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
+                    continue_drive = WaypointFollower(actor)
                     father_tree.add_child(change_lane)
-                continue_drive = WaypointFollower(actor, speed_value)
-                father_tree.add_child(continue_drive)
-            elif lane_change is not None:
-                if lane_change < 0:
-                    change_direction = "left"
+                    father_tree.add_child(continue_drive)
                 else:
-                    change_direction = "right"
-                lane_num = abs(lane_change)
-                change_lane = LaneChange(actor, speed=None, direction=change_direction, lane_changes=lane_num)
-                continue_drive = WaypointFollower(actor)
-                father_tree.add_child(change_lane)
-                father_tree.add_child(continue_drive)
+                    raise RuntimeError("nothing to set the car")
+                ego_total_distance += ego_speed * duration
             else:
-                raise RuntimeError("nothing to set the car")
+                distance = end_distance - start_distance
+                car_info[actor_name]["name"] = actor.type_id
+                car_info[actor_name]["distance_to_go"] = distance
+                car_info[actor_name]["start_lane_id"] = start_lane
+                car_info[actor_name]["end_lane_id"] = end_lane
+                ego_lane = start_lane
+                wp = CarlaDataProvider.get_waypoint_by_laneid(start_lane)
+                start_position = wp.transform.location
+                if wp:
+                    actor_visible = ActorTransformSetter(actor, wp.transform)
+                    car_config = config.get_car_config(actor_name)
+                    car_config.set_arg({"init_transform": wp.transform})
+                    father_tree.add_child(actor_visible)
+                else:
+                    raise RuntimeError(f"no valid position to spawn {actor_name} car")
+                if is_model[actor_name]:
+                    set_behavior_logic = SetBehaviorLogic(actor, start_position, distance, start_lane, end_lane)
+                    father_tree.add_child(set_behavior_logic)
+                else:
+                    # # Get the global route planner, used to calculate the route
+                    # dao = GlobalRoutePlannerDAO(CarlaDataProvider.get_world().get_map(), 0.5)
+                    # grp = GlobalRoutePlanner(dao)
+                    # end_position = start_wp.next(ego_distance + end_distance)[0].transform.location
+                    # distance = calculate_distance(
+                    #     start_position, end_position, grp
+                    # )
+                    car_need_speed = distance / 40
+                    ego_speed = car_need_speed
+                    # car_driving = FollowCar(actor, car_need_speed)
+                    # father_tree.add_child(car_driving)
 
-            # t = start_wp.transform
-            # t.rotation.yaw = 80
+                    direction = tools.find_direction(start_lane, end_lane)
+                    if direction is not None:
+                        lane_change = LaneChange(
+                            actor,
+                            speed=car_need_speed,
+                            direction=direction,
+                            distance_same_lane=5,
+                            distance_other_lane=10,
+                        )
+                        father_tree.add_child(lane_change)
+
+                    continue_drive = WaypointFollower(actor, car_need_speed)
+                    father_tree.add_child(continue_drive)
 
         elif isinstance(modifier, KeepStateModifier):
             if actor_name == 'ego_vehicle':
@@ -344,7 +700,7 @@ def process_speed_modifier(
             end_lane = logic_params['lane_end']
             end_location = logic_params['position_end']
             distance = end_location - start_location
-            ego_distance = distance
+            # ego_distance = distance
             wp = CarlaDataProvider.get_waypoint_by_laneid(start_lane)
             start_position = wp.transform.location
             if wp:
@@ -362,9 +718,10 @@ def process_speed_modifier(
                 follow_drive = WaypointFollower(actor, 15)
                 father_tree.add_child(follow_drive)
 
-        elif isinstance(modifier, AutoBindBehaviorModifier):
+        elif isinstance(modifier, AutoOrchestratesBehaviorModifier):
             actor = CarlaDataProvider.get_actor_by_name(actor_name)
             behavior_type, model_name, hyperparameters = modifier.get_behavior_model()
+            ego_distance = ego_speed * duration
             if behavior_type == "AI":
                 is_model[actor_name] = True
                 max_speed = hyperparameters.get('max_speed', 10)
@@ -378,6 +735,10 @@ def process_speed_modifier(
                     is_model[actor_name] = False
                 elif bm_name == "CARLA_Traffic_Manager":
                     is_model[actor_name] = True
+                elif bm_name == "behavior_agent":
+                    is_model[actor_name] = True
+                    set_bm = IniBM(actor, bm_name)
+                    father_tree.add_child(set_bm)
                 pass
             logic = modifier.get_logic()
             start_lane = logic['lane_start']
@@ -388,6 +749,19 @@ def process_speed_modifier(
             ego_car_conf = config.get_car_config("ego_vehicle")
             ego_car_location = ego_car_conf.get_transform().location
             ego_car_wp = CarlaDataProvider.get_map().get_waypoint(ego_car_location)
+
+            car_info[actor_name] = {
+                "behavior_type": behavior_type,
+                "model_name": model_name,
+                "max_speed": hyperparameters.get('max_speed', 10),
+                "max_acc": hyperparameters.get('max_acc', 5)
+            }
+            car_info[actor_name]["id"] = actor_name
+            car_info[actor_name]["name"] = actor.type_id
+            car_info[actor_name]["start_lane_id"] = start_lane
+            car_info[actor_name]["end_lane_id"] = end_lane
+            car_info[actor_name]["start_position"] = start_location
+            car_info[actor_name]["end_position"] = end_location
             if start_location is not None:
                 if start_location < 0:
                     wp_lists = ego_car_wp.previous(-start_location)
@@ -424,8 +798,9 @@ def process_speed_modifier(
                                 distance_other_lane=10,
                             )
                             father_tree.add_child(lane_change)
-
-                        continue_drive = WaypointFollower(actor, car_need_speed)
+                        else:
+                            pass
+                        continue_drive = WaypointFollower(actor, car_need_speed, avoid_collision=True)
                         father_tree.add_child(continue_drive)
                 else:
                     raise RuntimeError("car can not get speed")
@@ -732,8 +1107,10 @@ class OSC2Scenario(BasicScenario):
         ego_vehicles,
         config: OSC2ScenarioConfiguration,
         osc2_file,
+        mutation_json,
         debug_mode=False,
         criteria_enable=True,
+        ga_mode=False,
         timeout=300,
     ):
         """
@@ -748,6 +1125,9 @@ class OSC2Scenario(BasicScenario):
         self.all_duration = float()
 
         self.other_actors = None
+        self.GA_mode = ga_mode
+        with open(mutation_json, "r") as f:
+            self.config_json=json.load(f)
 
         self.behavior = None
 
@@ -904,6 +1284,7 @@ class OSC2Scenario(BasicScenario):
                         self.visit_call_directive(child)
                     else:
                         raise NotImplementedError(f"no implentment AST node {child}")
+                record_info(car_info)
             else:
                 if isinstance(sub_node, ast_node.DoMember):
                     self.visit_do_member(sub_node)
@@ -987,9 +1368,10 @@ class OSC2Scenario(BasicScenario):
             parent.add_child(behaviors)
 
         def visit_behavior_invocation(self, node: ast_node.BehaviorInvocation):
+            global car_info
             actor = node.actor
             behavior_name = node.behavior_name
-
+            is_auto_bind = False
             behavior_invocation_name = None
             if actor != None:
                 if actor == "ego_vehicle" and behavior_name != "drive"\
@@ -1002,7 +1384,8 @@ class OSC2Scenario(BasicScenario):
                 behavior_invocation_name = actor + "." + behavior_name
             else:
                 behavior_invocation_name = behavior_name
-
+            if behavior_invocation_name == "auto_orchestrates_behavior":
+                is_auto_bind = True
             if (
                 self.father_ins.scenario_declaration.get(behavior_invocation_name)
                 is not None
@@ -1414,44 +1797,90 @@ class OSC2Scenario(BasicScenario):
                         modifier_ins.set_args(keyword_args)
                         speed_modifiers.append(modifier_ins)
 
-                    elif modifier_name == "auto_bind_behavior":
-                        modifier_ins = AutoBindBehaviorModifier(actor, modifier_name)
-                        keyword_args = {}
-                        print(arguments)
-                        if isinstance(arguments, str):
-                            arguments = eval(arguments)
-                            keyword_args['behavior'] = arguments
-                        else:
-                            raise NotImplementedError(
-                                f"no implement argument of {modifier_name}"
-                            )
-                        modifier_ins.set_args(keyword_args)
-                        speed_modifiers.append(modifier_ins)
-
                     else:
                         raise NotImplementedError(
                             f"no implentment function: {modifier_name}"
                         )
 
             if modifier_invocation_no_occur:
-                car_actor = CarlaDataProvider.get_actor_by_name(actor)
-                car_driving = WaypointFollower(car_actor)
-                actor_drive.add_child(car_driving)
-                behavior.add_child(actor_drive)
-                self.__cur_behavior.add_child(behavior)
-                return
+                if is_auto_bind:
+                    modifier_name = "auto_orchestrates_behavior"
+                    arguments = self.visit_children(node)
+                    behavior_config = arguments[0]
+                    adaptive_targets_str = arguments[1]
+                    adaptive_targets_str = adaptive_targets_str.strip("[]")
+                    adaptive_targets = [x.strip() for x in adaptive_targets_str.split(",")]
+                    behavior_config = eval(behavior_config)
+                    auto_bind = py_trees.composites.Parallel(
+                        policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE,
+                        name="auto_orchestrates",
+                    )
+                    for npc in adaptive_targets:
+                        adaptive_npc_drive = py_trees.composites.Sequence(
+                            policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ALL,
+                            name=npc,
+                        )
+                        modifier_ins = AutoOrchestratesBehaviorModifier(npc, modifier_name)
+                        keyword_args = {}
+                        if isinstance(behavior_config, list):
+                            keyword_args['behavior'] = behavior_config
+                        else:
+                            raise NotImplementedError(
+                                f"no implement argument of {modifier_name}"
+                            )
+                        modifier_ins.set_args(keyword_args)
+                        speed_modifiers.append(modifier_ins)
+                        if self.father_ins.GA_mode:
+                            process_speed_modifier_with_para(
+                                self.father_ins.config,
+                                speed_modifiers,
+                                self.__duration,
+                                self.father_ins.all_duration,
+                                actor_drive,
+                                self.father_ins.config_json
+                            )
+                        else:
+                            process_speed_modifier(
+                                self.father_ins.config,
+                                speed_modifiers,
+                                self.__duration,
+                                self.father_ins.all_duration,
+                                actor_drive,
+                            )
+                        speed_modifiers.pop()
+                        auto_bind.add_child(adaptive_npc_drive)
+                    actor_drive.add_child(auto_bind)
+                    behavior.add_child(actor_drive)
+                    self.__cur_behavior.add_child(behavior)
+                    return
+                else:
+                    car_actor = CarlaDataProvider.get_actor_by_name(actor)
+                    car_driving = WaypointFollower(car_actor)
+                    actor_drive.add_child(car_driving)
+                    behavior.add_child(actor_drive)
+                    self.__cur_behavior.add_child(behavior)
+                    return
 
             process_location_modifier(
                 self.father_ins.config, location_modifiers, self.__duration, actor_drive
             )
-            process_speed_modifier(
-                self.father_ins.config,
-                speed_modifiers,
-                self.__duration,
-                self.father_ins.all_duration,
-                actor_drive,
-            )
-
+            if self.father_ins.GA_mode:
+                process_speed_modifier_with_para(
+                    self.father_ins.config,
+                    speed_modifiers,
+                    self.__duration,
+                    self.father_ins.all_duration,
+                    actor_drive,
+                    self.father_ins.config_json
+                )
+            else:
+                process_speed_modifier(
+                    self.father_ins.config,
+                    speed_modifiers,
+                    self.__duration,
+                    self.father_ins.all_duration,
+                    actor_drive,
+                )
             behavior.add_child(actor_drive)
             self.__cur_behavior.add_child(behavior)
 
@@ -1759,6 +2188,26 @@ class OSC2Scenario(BasicScenario):
                     {para_name[0]: self.father_ins.struct_declaration[para_type]}
                 )
 
+        def visit_choose_directive(self, node: ast_node.chooseDirective):
+            child_num = node.get_child_count()
+            rand_child = random.randint(0, child_num-1)
+            child = node.get_child(rand_child)
+            model, logic = self.visit_state_declaration(child)
+            return model, logic
+
+        def visit_state_declaration(self, node: ast_node.stateDeclaration):
+            model = None
+            logic = None
+            for child in node.get_children():
+                if isinstance(child, ast_node.logicDeclaration):
+                    field_name, arguments = self.visit_logic_declaration(child)
+                    if field_name == "model":
+                        model = OSC2Helper.flat_list(arguments)
+                    elif field_name == "logic":
+                        logic_params = arguments[1]
+                        logic = OSC2Helper.flat_list(logic_params)
+            return model, logic
+
         def visit_judge_exp(self, node: ast_node.judgeExp):
             model = None
             logic = None
@@ -1776,6 +2225,8 @@ class OSC2Scenario(BasicScenario):
         def visit_judge_declaration(self, node: ast_node.judgeDeclaration):
             model = None
             logic = None
+            field_name = None
+            arguments = None
             for child in node.get_children():
                 if isinstance(child, ast_node.logicDeclaration):
                     field_name, arguments = self.visit_logic_declaration(child)
@@ -1784,6 +2235,8 @@ class OSC2Scenario(BasicScenario):
                     elif field_name == "logic":
                         logic_params = arguments[1]
                         logic = OSC2Helper.flat_list(logic_params)
+                elif isinstance(child, ast_node.chooseDirective):
+                    model, logic = self.visit_choose_directive(child)
             return model, logic
 
         def visit_logic_declaration(self, node: ast_node.logicDeclaration):
@@ -1977,7 +2430,7 @@ class OSC2Scenario(BasicScenario):
         behavior_tree = behavior_builder.get_behavior_tree()
         self.set_behavior_tree(behavior_tree)
 
-        # py_trees.display.render_dot_tree(behavior_tree)
+        py_trees.display.render_dot_tree(behavior_tree)
 
         return self.behavior
 

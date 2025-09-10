@@ -12,30 +12,36 @@ scenario top:
 
     event start
 
-    global_state:{
-        ego_vehicle: {
-    	    model = {
-        	    model_name: "Interfuser",
-        	    behavior_type: "AI",
-        	    hyperparameters:{
-        		    max_acc: 5,
-        		    max_speed: 10
-        	    }
-            }
-            logic = {
-        	    logic_params: {
-        		    lane: "3, at:global_start",
-        		    position: "0m, at:global_start",
-        		    lane: "3, at:global_end",
-        		    position: "80m, at:global_end",
-        	    }
+#    global_state: state =
+    {
+        model = {
+            model_name: "Interfuser",
+            behavior_type: "AI",
+            hyperparameters:{
+                max_acc: 5,
+                max_speed: 10
             }
         }
-    }
+        logic = {
+            logic_params: {
+                lane: "3, at:global_start",
+                position: "0m, at:global_start",
+                lane: "3, at:global_end",
+                position: "80m, at:global_end",
+            }
+        }
+#    }
 
     do parallel:
         ego_vehicle.drive(path) with:
-            keep_state(global_state)
+            # keep_state(global_state)
+            set_behavior_model(behavior_type: Script, model: internal_npc, hyperparameters: Default)
+            set_behavior_logic(
+                lane:"3, at:start",
+                position:"30, behind:ego_vehicle, at:start",
+                lane:"4, right_of: ego_vehicle, at:end",
+                position:"20, ahead_of:ego_vehicle, at:end"
+            )
         serial(duration: 10s):
             parallel(duration: 10s):
                 npc.drive(path) with:
@@ -46,6 +52,7 @@ scenario top:
                         lane:"4, right_of: ego_vehicle, at:end",
                         position:"20, ahead_of:ego_vehicle, at:end"
                     )
+                npc1
 
             next: parallel(duration: 20s):
                 npc.drive(path) with:
@@ -54,3 +61,4 @@ scenario top:
                         change_lane: "lane_changes:1, side: left",
                         speed: 10kph
                     )
+

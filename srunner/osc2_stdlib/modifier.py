@@ -345,7 +345,7 @@ class SetBMModifier(Modifier):
     def get_hyperparameters(self):
         para = self.args['hyperparameters']
         if para == "Default":
-            return para
+            return {}
         pairs = [pair.strip().split('=') for pair in para.split(',')]
         result = {k.strip(): int(v.strip()) for k, v in pairs}
         return result
@@ -463,6 +463,30 @@ def split_for_logic(s):
         result.append(current.strip())
     return result
 
+
+generate_start = []
+generate_end = []
+
+def get_random_with_min_diff(min_val=0, max_val=100, min_diff=4, position="start"):
+    global generate_start
+    global generate_end
+
+    generate_p = []
+    if position == "start":
+        generate_p = generate_start
+    elif position == "end":
+        generate_p = generate_end
+
+    candidates = [
+        num for num in range(min_val, max_val + 1)
+        if all(abs(num - prev) >= min_diff for prev in generate_p)
+    ]
+    if not candidates:
+        raise ValueError("没有更多满足条件的数字可以生成了")
+    chosen = random.choice(candidates)
+    generate_p.append(chosen)
+    return chosen
+
 class KeepStateModifier(Modifier):
     def __init__(self, actor_name, name):
         super().__init__(actor_name, name)
@@ -507,7 +531,7 @@ class KeepStateModifier(Modifier):
                     result[key+'_end'] = value_fin
         return result
 
-class AutoBindBehaviorModifier(Modifier):
+class AutoOrchestratesBehaviorModifier(Modifier):
     def __init__(self, actor_name, name):
         super().__init__(actor_name, name)
 
@@ -539,7 +563,25 @@ class AutoBindBehaviorModifier(Modifier):
                 value_fin = int(temp[:-1].strip())
             elif temp.strip().isdigit():
                 value_fin = int(temp)
-
+            elif temp.startswith('[') and temp.endswith(']'):
+                temp = temp.strip("[]")
+                val_start = temp.split("..")[0]
+                val_end = temp.split("..")[1]
+                if val_start.endswith('m'):
+                    val_start = int(val_start[:-1].strip())
+                else:
+                    val_start = int(val_start)
+                if val_end.endswith('m'):
+                    val_end = int(val_end[:-1].strip())
+                else:
+                    val_end = int(val_end)
+                if abs(val_start - val_end) < 3:
+                    value_fin = random.randint(val_start,val_end)
+                else:
+                    if "start" in l[1]:
+                        value_fin = get_random_with_min_diff(val_start, val_end, position="start")
+                    elif "end" in l[1]:
+                        value_fin = get_random_with_min_diff(val_start, val_end, position="end")
             if "behind" in l[1]:
                 t = -value_fin
             elif "ahead_of" in l[1]:

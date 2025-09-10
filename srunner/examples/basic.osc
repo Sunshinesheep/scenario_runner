@@ -43,3 +43,6 @@ modifier Path.path_min_driving_lanes
 actor Model3
 actor Rubicon
 actor Walker02
+actor TT
+actor A2
+actor Carlacola

@@ -782,6 +782,42 @@ class recordDeclaration(Declaration):
         else:
             return visitor.visit_children(self)
 
+class chooseDirective(AST):
+    def __init__(self):
+        super().__init__()
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_choose_directive"):
+            listener.enter_choose_directive(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_choose_directive"):
+            listener.exit_choose_directive(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_choose_directive"):
+            return visitor.visit_choose_directive(self)
+        else:
+            return visitor.visit_children(self)
+
+class stateDeclaration(AST):
+    def __init__(self):
+        super().__init__()
+
+    def enter_node(self, listener):
+        if hasattr(listener, "enter_state_declaration"):
+            listener.enter_state_declaration(self)
+
+    def exit_node(self, listener):
+        if hasattr(listener, "exit_state_declaration"):
+            listener.exit_state_declaration(self)
+
+    def accept(self, visitor):
+        if hasattr(visitor, "visit_state_declaration"):
+            return visitor.visit_state_declaration(self)
+        else:
+            return visitor.visit_children(self)
+
 class judgeExp(AST):
     def __init__(self):
         super().__init__()

@@ -132,6 +132,12 @@ class ASTVisitor(BaseVisitor):
     def visit_record_declaration(self, node: ast_node.recordDeclaration):
         return self.visit_children(node)
 
+    def visit_choose_directive(self, node: ast_node.chooseDirective):
+        return self.visit_children(node)
+
+    def visit_state_declaration(self, node: ast_node.stateDeclaration):
+        return self.visit_children(node)
+
     def visit_judge_exp(self, node: ast_node.judgeExp):
         return self.visit_children(node)
 

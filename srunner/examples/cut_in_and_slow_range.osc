@@ -5,7 +5,7 @@ global my_map: string = "Town04"
 global min_lane: int = 2
 
 scenario dut.cut_in_and_slow:
-    
+
     ego_vehicle: Model3
     npc: Rubicon
     event start

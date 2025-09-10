@@ -21,7 +21,7 @@ scenario top:
             npc.drive(path) with:
                 lane(right_of: ego_vehicle, at: start)
                 position(15m, behind: ego_vehicle, at: start)
-                position(20m, ahead_of: ego_vehicle, at: end)       
+                position(20m, ahead_of: ego_vehicle, at: end)
 
         slow: parallel(duration: 10s):
             ego_vehicle.drive(path)

@@ -30,12 +30,17 @@ from py_trees.blackboard import Blackboard
 import networkx
 
 import carla
+import gym
 from scipy.signal.windows import blackman
+
+from stable_baselines3 import PPO
+from gym import spaces
 
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.behavior_agent import BehaviorAgent
+from agents.navigation.cutting_in_agent import CuttingInAgent
+from agents.navigation.sudden_brake import SuddenBrakeAgent
 from agents.navigation.local_planner import RoadOption, LocalPlanner
-
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.tools.misc import is_within_distance
 
@@ -45,7 +50,9 @@ from srunner.scenariomanager.actorcontrols.actor_control import ActorControl
 from srunner.scenariomanager.timer import GameTime
 from srunner.tools.scenario_helper import detect_lane_obstacle
 from srunner.tools.scenario_helper import generate_target_waypoint_list_multilane
+from srunner.scenariomanager.get_obs import GetObs
 
+from team_code.lav_agent import LAVAgent
 from leaderboard.team_code.interfuser_agent import InterfuserAgent
 from leaderboard.leaderboard.utils.route_manipulation import interpolate_trajectory
 from leaderboard.leaderboard.autoagents.agent_wrapper import AgentWrapper
@@ -53,8 +60,15 @@ from leaderboard.leaderboard.envs.sensor_interface import SensorInterface
 
 import srunner.tools as sr_tools
 
+
 EPSILON = 0.001
 
+def calculate_min_distance(other_cars_position, ego_car_position):
+    min_distance = 100
+    for car_position in other_cars_position:
+        if abs(calculate_distance(car_position, ego_car_position)) < min_distance:
+            min_distance = abs(calculate_distance(car_position, ego_car_position))
+    return min_distance
 
 def calculate_distance(location, other_location, global_planner=None):
     """
@@ -186,16 +200,16 @@ class IniBM(AtomicBehavior):
 
     def update(self):
         blackboard = py_trees.blackboard.Blackboard()
-        blackboard.set("bm_name", self._behavior_model)
-        blackboard.set("max_speed", self._max_speed)
-        blackboard.set("max_acc", self._max_acc)
+        blackboard.set(str(self._actor.id)+"bm_name", self._behavior_model)
+        blackboard.set(str(self._actor.id)+"max_speed", self._max_speed)
+        blackboard.set(str(self._actor.id)+"max_acc", self._max_acc)
         return py_trees.common.Status.SUCCESS
 
 class SetBehaviorLogic(AtomicBehavior):
     """
     set an agent that control the vehicle
     """
-    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, global_priority=True, name="Set_Behavior_Logic"):
+    def __init__(self, actor, start_position, end_distance=0, start_lane=1, end_lane=1, global_priority=False, name="Set_Behavior_Logic"):
 
         super(SetBehaviorLogic, self).__init__(name, actor)
         self._agent = None
@@ -211,6 +225,7 @@ class SetBehaviorLogic(AtomicBehavior):
         self.end_position = None
         self.logger.debug("%s.__init__()" % (self.__class__.__name__))
         self.change = None
+        self.drl_agent = None
         if start_lane > end_lane:
             self.change = 'left'
         elif start_lane < end_lane:
@@ -232,9 +247,9 @@ class SetBehaviorLogic(AtomicBehavior):
         world.apply_settings(settings)
 
         blackboard = py_trees.blackboard.Blackboard()
-        self._target_agent = blackboard.get("bm_name")
-        self._max_speed = blackboard.get("max_speed")
-        self._max_acc = blackboard.get("max_acc")
+        self._target_agent = blackboard.get(str(self._actor.id)+"bm_name")
+        self._max_speed = blackboard.get(str(self._actor.id)+"max_speed")
+        self._max_acc = blackboard.get(str(self._actor.id)+"max_acc")
 
         map = CarlaDataProvider.get_map()
         _start_position = self._start_position
@@ -245,31 +260,87 @@ class SetBehaviorLogic(AtomicBehavior):
                 _end_wp = _start_wp.next(self._end_position)[0].get_left_lane()
             else:
                 _end_wp = _start_wp.next(self._end_position)[0].get_right_lane()
-
             _end_position = _end_wp.transform.location
-            gps_route, self.route = interpolate_trajectory(self._world, [_start_position, _end_position],
-                                                           hop_resolution=1.0)
         else:
             _end_wp = _start_wp.next(self._end_position)[0]
             _end_position = _end_wp.transform.location
-            gps_route, self.route = interpolate_trajectory(self._world, [_start_position,
-                                                                         _end_position],
-                                                           hop_resolution=1.0)
         self.end_position = _end_position
-        self.agent = InterfuserAgent("/home/lhy/scenario_runner/leaderboard/team_code/interfuser_config.py")
-        self.agent.config.max_speed = self._max_speed
-        self.agent.config.max_acc = self._max_acc
-        self.agent.set_global_plan(gps_route, self.route)
-        CarlaDataProvider.get_world().tick()
+        if self._target_agent == "behavior_agent":
+            self._agent = BehaviorAgent(self._actor, behavior="cautious")
+            self._agent.set_destination(_end_position, _start_position)
 
-        self.agent.sensor_interface = SensorInterface()
-        self._agent = AgentWrapper(self.agent)
-        self._agent.setup_sensors(self._actor, False)
+        elif self._target_agent == "adversarial_agent":
+            self._agent = CuttingInAgent(self._actor, _end_position, _start_position)
+
+        elif self._target_agent == "LAV":
+            gps_route, self.route = interpolate_trajectory(self._world, [_start_position, _end_position],
+                                                           hop_resolution=1.0)
+
+            self.agent = LAVAgent("/home/lhy/projects/scenario_runner/config.yaml")
+            self.agent.set_global_plan(gps_route, self.route)
+            CarlaDataProvider.get_world().tick()
+
+            self.agent.sensor_interface = SensorInterface()
+            self._agent = AgentWrapper(self.agent)
+            self._agent.setup_sensors(self._actor, False)
+
+        elif self._target_agent == "Interfuser":
+            gps_route, self.route = interpolate_trajectory(self._world, [_start_position, _end_position],
+                                                           hop_resolution=1.0)
+            self.agent = InterfuserAgent("/home/lhy/scenario_runner/leaderboard/team_code/interfuser_config.py")
+            self.agent.config.max_speed = self._max_speed
+            self.agent.config.max_acc = self._max_acc
+            self.agent.set_global_plan(gps_route, self.route)
+            CarlaDataProvider.get_world().tick()
+
+            self.agent.sensor_interface = SensorInterface()
+            self._agent = AgentWrapper(self.agent)
+            self._agent.setup_sensors(self._actor, False)
+
+        elif self._target_agent == "DRL":
+            obs_dim = 5
+            low = np.array([-1, -1, -1, -1, 0], dtype=np.float32)  # Set speed to [-1, 1] and other values to [-1, 1]
+            high = np.array([1, 1, 1, 1, 1], dtype=np.float32)
+            observation_space = spaces.Box(low=low, high=high, shape=(obs_dim,), dtype=np.float32)
+            action_space = spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)
+
+            class DummyEnv(gym.Env):
+                def __init__(self):
+                    super().__init__()
+                    self.observation_space = observation_space
+                    self.action_space = action_space
+
+            self.drl_agent = PPO.load("/home/lhy/projects/Autonomous-Navigation-DRL-CARLA/Model/best_model.zip", env=DummyEnv(), custom_objects={
+                "observation_space": observation_space,
+                "action_space": action_space
+                })
+            self.get_obs = GetObs(CarlaDataProvider.get_world(), _start_wp, _end_wp)
 
     def update(self):
         new_status = py_trees.common.Status.RUNNING
-
-        self._actor.apply_control(self._agent())
+        if self._target_agent == "behavior_agent":
+            self._actor.apply_control(self._agent.run_step())
+        elif self._target_agent == "adversarial_agent":
+            self._actor.apply_control(self._agent.run_step())
+        elif self._target_agent == "DRL":
+            vehicle_transform = CarlaDataProvider.get_transform(self._actor)
+            vehicle_waypoint = CarlaDataProvider.get_map().get_waypoint(CarlaDataProvider.get_location(self._actor))
+            vehicle_velocity = CarlaDataProvider.get_velocity(self._actor)
+            obs = self.get_obs.get_observation(vehicle_transform, vehicle_waypoint, vehicle_velocity)
+            action, _states = self.drl_agent.predict(obs)
+            throttle = float(action[0])
+            steer = float(action[1])
+            if throttle >= 0:
+                throttle = abs(throttle)/2
+                brake = 0.0
+            if throttle < 0:
+                brake = abs(throttle)/2
+                throttle = 0.0
+            drl_control = carla.VehicleControl(throttle=throttle, steer=steer, brake=brake)
+            self._actor.apply_control(drl_control)
+        else:
+            self._actor.apply_control(self._agent())
+            print("other is running")
         current_location = CarlaDataProvider.get_location(self._actor)
         if calculate_distance(current_location, self.end_position) < 2.0 and CarlaDataProvider.get_velocity(self._actor) < 1.0:
             # 此失败仅仅是为了终止整个行为树，并非真实的行为失败
@@ -2557,8 +2628,9 @@ class LaneChange(WaypointFollower):
         return status
 
 class FollowCar(WaypointFollower):
-    def __init__(self, actor, speed=None, rel_distance=15, name='FollowCar'):
+    def __init__(self, actor, speed=None, rel_distance=20, name='FollowCar'):
         self.ego_vehicle = None
+        self.npc_position = []
         self._rel_distance = rel_distance
         super(FollowCar, self).__init__(actor,target_speed=speed, name=name)
 
@@ -2568,9 +2640,12 @@ class FollowCar(WaypointFollower):
 
     def update(self):
         status = super(FollowCar, self).update()
-        current_ego_position = CarlaDataProvider.get_location(self.ego_vehicle)
-        current_car_position = CarlaDataProvider.get_location(self._actor)
-        if abs(calculate_distance(current_ego_position, current_car_position)) < self._rel_distance:
+        for npc in CarlaDataProvider._world.get_actors().filter("vehicle*"):
+            if self._actor != npc:
+                self.npc_position.append(CarlaDataProvider.get_location(npc))
+        car_position = CarlaDataProvider.get_location(self._actor)
+        min_distance = calculate_min_distance(self.npc_position, car_position)
+        if min_distance < self._rel_distance:
             status = py_trees.common.Status.SUCCESS
         return status
 

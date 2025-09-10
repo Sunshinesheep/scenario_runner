@@ -1,0 +1,66 @@
+struct adapt_npc_bm:
+    def adapt(scenario_mode: string) is
+    if scenario_mode == "natural":
+        model = {
+            model_name: "internal_npc",
+            behavior_type: "Script",
+            hyperparameters: {
+                max_acc: 5
+            }
+        }
+        logic={
+            logic_params: {
+                lane: "[1..2], at:start",
+                position: "[20..150m], behind: ego_vehicle, at:start",
+                lane: "[1..2], side_of: ego_vehicle, side: right, at:end",
+                position: "[30..200m], ahead_of: ego_vehicle, at:end"
+            }
+        }
+    elif scenario_mode == "diverse":
+        model = {
+            model_name: "internal_npc",
+            behavior_type: "Script",
+            hyperparameters: {
+                max_acc: 5,
+                max_speed: 20
+            }
+        }
+        logic = {
+            logic_params: {
+                lane: "2, at:start",
+                position: "[30m..50m], behind: ego_vehicle, at:start",
+                lane: "3, at:end",
+                position: "[30m..70m], ahead_of: ego_vehicle, at:end"
+            }
+        }
+    elif scenario_mode == "adversarial":
+        choose:
+            {
+                model = {
+                    model_name: "adversarial_npc",
+                    behavior_type: "Script",
+                    hyperparameters: "default"
+                }
+                logic = {
+                    logic_params: {
+                        lane: "[1..2], at:start",
+                        position: "15m, behind: ego_vehicle, at:start",
+                        lane: "[2..3], side_of: ego_vehicle, side: right, at:end",
+                        position: "20m, ahead_of: ego_vehicle, at:end"
+                    }
+                }
+            },
+            {
+                model= {
+                    model_name: "GAIL",
+                    behavior_type: "AI",
+                    hyperparameters: "default"
+                }
+                logic= {
+                    logic_params: {
+                        lane: "[1..2], at:start",
+                        position: "[10m..50m], at:start",
+                        position: "[60m..80m], at:end"
+                    }
+                }
+            }

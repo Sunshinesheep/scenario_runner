@@ -539,6 +539,16 @@ class OpenSCENARIO2Visitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by OpenSCENARIO2Parser#chooseDirective.
+    def visitChooseDirective(self, ctx:OpenSCENARIO2Parser.ChooseDirectiveContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by OpenSCENARIO2Parser#stateDeclaration.
+    def visitStateDeclaration(self, ctx:OpenSCENARIO2Parser.StateDeclarationContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by OpenSCENARIO2Parser#methodQualifier.
     def visitMethodQualifier(self, ctx:OpenSCENARIO2Parser.MethodQualifierContext):
         return self.visitChildren(ctx)
